@@ -8,56 +8,56 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Model struct {
+type App struct {
 	messages []string
 	input    string
 	width    int
 	height   int
 }
 
-func NewModel() Model {
-	return Model{
+func NewApp() App {
+	return App{
 		messages: []string{},
 		input:    "",
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (a App) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		a.width = msg.Width
+		a.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			return m, tea.Quit
+			return a, tea.Quit
 		case "enter":
-			if strings.TrimSpace(m.input) != "" {
-				m.messages = append(m.messages, m.input)
-				m.input = ""
+			if strings.TrimSpace(a.input) != "" {
+				a.messages = append(a.messages, a.input)
+				a.input = ""
 			}
 		case "backspace":
-			if len(m.input) > 0 {
-				m.input = m.input[:len(m.input)-1]
+			if len(a.input) > 0 {
+				a.input = a.input[:len(a.input)-1]
 			}
 		default:
-			m.input += msg.String()
+			a.input += msg.String()
 		}
 	}
-	return m, nil
+	return a, nil
 }
 
-func (m Model) View() string {
-	if m.width == 0 || m.height == 0 {
+func (a App) View() string {
+	if a.width == 0 || a.height == 0 {
 		return "Loading..."
 	}
 
-	chatHeight := m.height - 7
-	chatWidth := m.width - 2
+	chatHeight := a.height - 7
+	chatWidth := a.width - 2
 
 	chatStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -73,21 +73,21 @@ func (m Model) View() string {
 		Width(chatWidth)
 
 	chatContent := ""
-	if len(m.messages) == 0 {
+	if len(a.messages) == 0 {
 		chatContent = "No messages yet. Start typing below!"
 	} else {
 		maxMessages := chatHeight - 4
 		start := 0
-		if len(m.messages) > maxMessages {
-			start = len(m.messages) - maxMessages
+		if len(a.messages) > maxMessages {
+			start = len(a.messages) - maxMessages
 		}
-		for i := start; i < len(m.messages); i++ {
-			chatContent += fmt.Sprintf("You: %s\n", m.messages[i])
+		for i := start; i < len(a.messages); i++ {
+			chatContent += fmt.Sprintf("You: %s\n", a.messages[i])
 		}
 	}
 
 	chat := chatStyle.Render(chatContent)
-	input := inputStyle.Render(fmt.Sprintf("> %s", m.input))
+	input := inputStyle.Render(fmt.Sprintf("> %s", a.input))
 	help := "Press 'q' or Ctrl+C to quit"
 
 	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help)
