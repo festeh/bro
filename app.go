@@ -11,7 +11,6 @@ import (
 type Model struct {
 	messages []string
 	input    string
-	cursor   int
 	width    int
 	height   int
 }
@@ -20,7 +19,6 @@ func NewModel() Model {
 	return Model{
 		messages: []string{},
 		input:    "",
-		cursor:   0,
 	}
 }
 
