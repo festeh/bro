@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/revrost/go-openrouter"
+	"github.com/festeh/bro/openrouter"
 )
 
 type Message struct {
@@ -17,9 +15,6 @@ type Message struct {
 	IsBot   bool
 }
 
-type streamChunkMsg string
-type streamDoneMsg struct{}
-type streamErrorMsg error
 
 type App struct {
 	messages        []Message
@@ -28,12 +23,19 @@ type App struct {
 	height          int
 	currentResponse string
 	isWaiting       bool
+	client          *openrouter.Client
 }
 
 func NewApp() App {
+	client, err := openrouter.NewClient()
+	if err != nil {
+		fmt.Printf("Error initializing OpenRouter client: %v\n", err)
+	}
+	
 	return App{
 		messages: []Message{},
 		input:    "",
+		client:   client,
 	}
 }
 
@@ -51,12 +53,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return a, tea.Quit
 		case "enter":
-			if strings.TrimSpace(a.input) != "" && !a.isWaiting {
+			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
 				userMsg := Message{Role: "user", Content: a.input, IsBot: false}
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
-				cmd := a.sendToOpenRouter(a.input)
+				cmd := a.client.SendMessage(a.input)
 				a.input = ""
 				return a, cmd
 			}
@@ -67,13 +69,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			a.input += msg.String()
 		}
-	case streamChunkMsg:
+	case openrouter.StreamChunkMsg:
 		a.currentResponse += string(msg)
-	case streamDoneMsg:
+	case openrouter.StreamDoneMsg:
 		a.messages = append(a.messages, Message{Role: "assistant", Content: a.currentResponse, IsBot: true})
 		a.currentResponse = ""
 		a.isWaiting = false
-	case streamErrorMsg:
+	case openrouter.StreamErrorMsg:
 		a.messages = append(a.messages, Message{Role: "assistant", Content: fmt.Sprintf("Error: %v", msg), IsBot: true})
 		a.currentResponse = ""
 		a.isWaiting = false
@@ -135,52 +137,3 @@ func (a App) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help)
 }
 
-func (a App) sendToOpenRouter(userInput string) tea.Cmd {
-	return func() tea.Msg {
-		apiKey := os.Getenv("OPENROUTER_API_KEY")
-		if apiKey == "" {
-			return streamErrorMsg(fmt.Errorf("OPENROUTER_API_KEY environment variable not set"))
-		}
-
-		client := openrouter.NewClient(apiKey)
-		
-		messages := []openrouter.ChatCompletionMessage{
-			{Role: "user", Content: openrouter.Content{Text: userInput}},
-		}
-
-		req := openrouter.ChatCompletionRequest{
-			Model:    "openai/gpt-3.5-turbo",
-			Messages: messages,
-			Stream:   true,
-		}
-
-		stream, err := client.CreateChatCompletionStream(context.Background(), req)
-		if err != nil {
-			return streamErrorMsg(err)
-		}
-
-		return tea.Batch(a.readFromStream(stream))
-	}
-}
-
-func (a App) readFromStream(stream *openrouter.ChatCompletionStream) tea.Cmd {
-	return func() tea.Msg {
-		response, err := stream.Recv()
-		if err != nil {
-			stream.Close()
-			if err.Error() == "EOF" {
-				return streamDoneMsg{}
-			}
-			return streamErrorMsg(err)
-		}
-
-		if len(response.Choices) > 0 && response.Choices[0].Delta.Content != "" {
-			return tea.Batch(
-				func() tea.Msg { return streamChunkMsg(response.Choices[0].Delta.Content) },
-				a.readFromStream(stream),
-			)
-		}
-
-		return a.readFromStream(stream)
-	}
-}
