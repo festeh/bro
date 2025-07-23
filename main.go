@@ -12,6 +12,8 @@ type model struct {
 	messages []string
 	input    string
 	cursor   int
+	width    int
+	height   int
 }
 
 func initialModel() model {
@@ -28,6 +30,9 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -49,26 +54,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var s strings.Builder
+	if m.width == 0 || m.height == 0 {
+		return "Loading..."
+	}
+
+	chatHeight := m.height - 7
+	chatWidth := m.width - 2
 
 	chatStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62")).
 		Padding(1).
-		Width(80).
-		Height(20)
+		Width(chatWidth).
+		Height(chatHeight)
 
 	inputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("205")).
 		Padding(0, 1).
-		Width(80)
+		Width(chatWidth)
 
 	chatContent := ""
 	if len(m.messages) == 0 {
 		chatContent = "No messages yet. Start typing below!"
 	} else {
-		maxMessages := 18
+		maxMessages := chatHeight - 4
 		start := 0
 		if len(m.messages) > maxMessages {
 			start = len(m.messages) - maxMessages
@@ -78,12 +88,11 @@ func (m model) View() string {
 		}
 	}
 
-	s.WriteString(chatStyle.Render(chatContent))
-	s.WriteString("\n")
-	s.WriteString(inputStyle.Render(fmt.Sprintf("> %s", m.input)))
-	s.WriteString("\n\nPress 'q' or Ctrl+C to quit")
+	chat := chatStyle.Render(chatContent)
+	input := inputStyle.Render(fmt.Sprintf("> %s", m.input))
+	help := "Press 'q' or Ctrl+C to quit"
 
-	return s.String()
+	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help)
 }
 
 func main() {
@@ -93,3 +102,4 @@ func main() {
 		fmt.Printf("Error: %v", err)
 	}
 }
+
