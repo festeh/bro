@@ -24,6 +24,7 @@ type App struct {
 	currentResponse string
 	isWaiting       bool
 	client          *openrouter.Client
+	eventChan       chan tea.Msg
 }
 
 func NewApp() App {
@@ -33,15 +34,29 @@ func NewApp() App {
 	}
 	
 	return App{
-		messages: []Message{},
-		input:    "",
-		client:   client,
+		messages:  []Message{},
+		input:     "",
+		client:    client,
+		eventChan: make(chan tea.Msg, 100),
 	}
 }
 
 func (a App) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		func() tea.Msg { return nil },
+		a.listenForEvents(),
+	)
 }
+
+func (a App) listenForEvents() tea.Cmd {
+	return func() tea.Msg {
+		return <-a.eventChan
+	}
+}
+
+type streamChunkMsg string
+type streamDoneMsg struct{}
+type streamErrorMsg error
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -58,9 +73,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
-				cmd := a.client.SendMessage(a.input)
+				
+				userInput := a.input
 				a.input = ""
-				return a, cmd
+				
+				return a, func() tea.Msg {
+					err := a.client.SendMessage(userInput, func(event openrouter.StreamEvent) {
+						switch event.Type {
+						case openrouter.StreamEventChunk:
+							a.eventChan <- streamChunkMsg(event.Content)
+						case openrouter.StreamEventDone:
+							a.eventChan <- streamDoneMsg{}
+						case openrouter.StreamEventError:
+							a.eventChan <- streamErrorMsg(event.Error)
+						}
+					})
+					if err != nil {
+						return streamErrorMsg(err)
+					}
+					return nil
+				}
 			}
 		case "backspace":
 			if len(a.input) > 0 {
@@ -69,16 +101,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			a.input += msg.String()
 		}
-	case openrouter.StreamChunkMsg:
+	case streamChunkMsg:
 		a.currentResponse += string(msg)
-	case openrouter.StreamDoneMsg:
+		return a, a.listenForEvents()
+	case streamDoneMsg:
 		a.messages = append(a.messages, Message{Role: "assistant", Content: a.currentResponse, IsBot: true})
 		a.currentResponse = ""
 		a.isWaiting = false
-	case openrouter.StreamErrorMsg:
+		return a, a.listenForEvents()
+	case streamErrorMsg:
 		a.messages = append(a.messages, Message{Role: "assistant", Content: fmt.Sprintf("Error: %v", msg), IsBot: true})
 		a.currentResponse = ""
 		a.isWaiting = false
+		return a, a.listenForEvents()
 	}
 	return a, nil
 }
