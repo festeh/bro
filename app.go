@@ -12,9 +12,11 @@ import (
 type Message struct {
 	Role    string
 	Content string
-	IsBot   bool
 }
 
+func (m *Message) IsUser() bool {
+	return m.Role == "user"
+}
 
 type App struct {
 	messages        []Message
@@ -32,9 +34,14 @@ func NewApp() App {
 	if err != nil {
 		fmt.Printf("Error initializing OpenRouter client: %v\n", err)
 	}
-	
+
+	systemPrompt := GenerateSystemPrompt()
+	initialMessages := []Message{
+		{Role: "system", Content: systemPrompt},
+	}
+
 	return App{
-		messages:  []Message{},
+		messages:  initialMessages,
 		input:     "",
 		client:    client,
 		eventChan: make(chan tea.Msg, 100),
@@ -69,14 +76,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
-				userMsg := Message{Role: "user", Content: a.input, IsBot: false}
+				userMsg := Message{Role: "user", Content: a.input}
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
-				
+
 				userInput := a.input
 				a.input = ""
-				
+
 				return a, func() tea.Msg {
 					err := a.client.SendMessage(userInput, func(event openrouter.StreamEvent) {
 						switch event.Type {
@@ -105,12 +112,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentResponse += string(msg)
 		return a, a.listenForEvents()
 	case streamDoneMsg:
-		a.messages = append(a.messages, Message{Role: "assistant", Content: a.currentResponse, IsBot: true})
+		a.messages = append(a.messages, Message{Role: "assistant", Content: a.currentResponse})
 		a.currentResponse = ""
 		a.isWaiting = false
 		return a, a.listenForEvents()
 	case streamErrorMsg:
-		a.messages = append(a.messages, Message{Role: "assistant", Content: fmt.Sprintf("Error: %v", msg), IsBot: true})
+		a.messages = append(a.messages, Message{Role: "assistant", Content: fmt.Sprintf("Error: %v", msg)})
 		a.currentResponse = ""
 		a.isWaiting = false
 		return a, a.listenForEvents()
@@ -149,13 +156,13 @@ func (a App) View() string {
 			start = len(a.messages) - maxMessages
 		}
 		for i := start; i < len(a.messages); i++ {
-			prefix := "You"
-			if a.messages[i].IsBot {
-				prefix = "AI"
+			prefix := "AI"
+			if a.messages[i].IsUser() {
+				prefix = "You"
 			}
 			chatContent += fmt.Sprintf("%s: %s\n", prefix, a.messages[i].Content)
 		}
-		
+
 		if a.currentResponse != "" {
 			chatContent += fmt.Sprintf("AI: %s", a.currentResponse)
 			if a.isWaiting {
@@ -171,4 +178,3 @@ func (a App) View() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help)
 }
-
