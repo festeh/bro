@@ -8,15 +8,28 @@ import (
 )
 
 type StreamEvent struct {
-	Type    string
-	Content string
-	Error   error
+	Type      string
+	Content   string
+	Error     error
+	ToolCalls []ToolCall
+}
+
+type ToolCall struct {
+	ID       string                 `json:"id"`
+	Type     string                 `json:"type"`
+	Function ToolCallFunction       `json:"function"`
+}
+
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 const (
-	StreamEventChunk = "chunk"
-	StreamEventDone  = "done"
-	StreamEventError = "error"
+	StreamEventChunk    = "chunk"
+	StreamEventDone     = "done"
+	StreamEventError    = "error"
+	StreamEventToolCall = "tool_call"
 )
 
 type StreamHandler func(StreamEvent)
@@ -49,12 +62,33 @@ func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
 		{Role: "user", Content: openrouter.Content{Text: userInput}},
 	}
 
+	tools := []openrouter.Tool{
+		{
+			Type: openrouter.ToolTypeFunction,
+			Function: &openrouter.FunctionDefinition{
+				Name:        "bash",
+				Description: "Execute a bash command in the terminal and return the output",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"command": map[string]interface{}{
+							"type":        "string",
+							"description": "The bash command to execute",
+						},
+					},
+					"required": []string{"command"},
+				},
+			},
+		},
+	}
+
 	req := openrouter.ChatCompletionRequest{
 		Model:       c.config.Model,
 		Messages:    messages,
 		Stream:      true,
 		Temperature: 0.5,
 		MaxTokens:   10000,
+		Tools:       tools,
 		Usage: &openrouter.IncludeUsage{
 			Include: true,
 		},
@@ -84,11 +118,33 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 			return
 		}
 
-		if len(response.Choices) > 0 && response.Choices[0].Delta.Content != "" {
-			handler(StreamEvent{
-				Type:    StreamEventChunk,
-				Content: response.Choices[0].Delta.Content,
-			})
+		if len(response.Choices) > 0 {
+			choice := response.Choices[0]
+			
+			if choice.Delta.Content != "" {
+				handler(StreamEvent{
+					Type:    StreamEventChunk,
+					Content: choice.Delta.Content,
+				})
+			}
+			
+			if len(choice.Delta.ToolCalls) > 0 {
+				var toolCalls []ToolCall
+				for _, tc := range choice.Delta.ToolCalls {
+					toolCalls = append(toolCalls, ToolCall{
+						ID:   tc.ID,
+						Type: string(tc.Type),
+						Function: ToolCallFunction{
+							Name:      tc.Function.Name,
+							Arguments: tc.Function.Arguments,
+						},
+					})
+				}
+				handler(StreamEvent{
+					Type:      StreamEventToolCall,
+					ToolCalls: toolCalls,
+				})
+			}
 		}
 	}
 }

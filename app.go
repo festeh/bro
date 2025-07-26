@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -67,6 +68,7 @@ func (a App) listenForEvents() tea.Cmd {
 type streamChunkMsg string
 type streamDoneMsg struct{}
 type streamErrorMsg error
+type streamToolCallMsg openrouter.StreamEvent
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -96,6 +98,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							a.eventChan <- streamDoneMsg{}
 						case openrouter.StreamEventError:
 							a.eventChan <- streamErrorMsg(event.Error)
+						case openrouter.StreamEventToolCall:
+							a.eventChan <- streamToolCallMsg(event)
 						}
 					})
 					if err != nil {
@@ -123,6 +127,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: fmt.Sprintf("Error: %v", msg)})
 		a.currentResponse = ""
 		a.isWaiting = false
+		return a, a.listenForEvents()
+	case streamToolCallMsg:
+		event := openrouter.StreamEvent(msg)
+		for _, toolCall := range event.ToolCalls {
+			if toolCall.Function.Name == "bash" {
+				a.currentResponse += fmt.Sprintf("\n🔧 Executing: %s\n", toolCall.Function.Arguments)
+				
+				var args BashToolArgs
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
+					result := ExecuteBashTool(args)
+					a.currentResponse += fmt.Sprintf("Exit code: %d\n", result.ExitCode)
+					if result.Stdout != "" {
+						a.currentResponse += fmt.Sprintf("Output:\n%s\n", result.Stdout)
+					}
+					if result.Stderr != "" {
+						a.currentResponse += fmt.Sprintf("Error output:\n%s\n", result.Stderr)
+					}
+					if result.Error != "" {
+						a.currentResponse += fmt.Sprintf("Execution error: %s\n", result.Error)
+					}
+				}
+			}
+		}
 		return a, a.listenForEvents()
 	}
 	return a, nil
