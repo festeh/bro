@@ -30,9 +30,20 @@ type App struct {
 }
 
 func NewApp() App {
-	client, err := openrouter.NewClient()
+	env, err := openrouter.NewEnvironment()
+	if err != nil {
+		fmt.Printf("Error initializing environment: %v\n", err)
+		return App{}
+	}
+	
+	config := &openrouter.Config{
+		Model: "openai/gpt-3.5-turbo",
+	}
+	
+	client, err := openrouter.NewClient(env, config)
 	if err != nil {
 		fmt.Printf("Error initializing OpenRouter client: %v\n", err)
+		return App{}
 	}
 
 	systemPrompt := GenerateSystemPrompt()
