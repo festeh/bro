@@ -50,9 +50,14 @@ func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
 	}
 
 	req := openrouter.ChatCompletionRequest{
-		Model:    c.config.Model,
-		Messages: messages,
-		Stream:   true,
+		Model:       c.config.Model,
+		Messages:    messages,
+		Stream:      true,
+		Temperature: 0.5,
+		MaxTokens:   10000,
+		Usage: &openrouter.IncludeUsage{
+			Include: true,
+		},
 	}
 
 	stream, err := c.client.CreateChatCompletionStream(context.Background(), req)
@@ -67,7 +72,7 @@ func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
 
 func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler StreamHandler) {
 	defer stream.Close()
-	
+
 	for {
 		response, err := stream.Recv()
 		if err != nil {
@@ -87,3 +92,4 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 		}
 	}
 }
+

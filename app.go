@@ -9,14 +9,6 @@ import (
 	"github.com/festeh/bro/openrouter"
 )
 
-type Message struct {
-	Role    string
-	Content string
-}
-
-func (m *Message) IsUser() bool {
-	return m.Role == "user"
-}
 
 type App struct {
 	messages        []Message
@@ -48,7 +40,7 @@ func NewApp() App {
 
 	systemPrompt := GenerateSystemPrompt()
 	initialMessages := []Message{
-		{Role: "system", Content: systemPrompt},
+		{Role: RoleSystem, Content: systemPrompt},
 	}
 
 	return App{
@@ -87,7 +79,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
-				userMsg := Message{Role: "user", Content: a.input}
+				userMsg := Message{Role: RoleUser, Content: a.input}
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
@@ -123,12 +115,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentResponse += string(msg)
 		return a, a.listenForEvents()
 	case streamDoneMsg:
-		a.messages = append(a.messages, Message{Role: "assistant", Content: a.currentResponse})
+		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: a.currentResponse})
 		a.currentResponse = ""
 		a.isWaiting = false
 		return a, a.listenForEvents()
 	case streamErrorMsg:
-		a.messages = append(a.messages, Message{Role: "assistant", Content: fmt.Sprintf("Error: %v", msg)})
+		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: fmt.Sprintf("Error: %v", msg)})
 		a.currentResponse = ""
 		a.isWaiting = false
 		return a, a.listenForEvents()
