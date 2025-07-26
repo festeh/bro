@@ -45,7 +45,7 @@ func TestClientStreaming(t *testing.T) {
 	}
 
 	// Execute the streaming request
-	err := client.SendMessage("hey how are you", handler)
+	err = client.SendMessage("hey how are you", handler)
 	if err != nil {
 		t.Fatalf("Failed to send message: %v", err)
 	}
