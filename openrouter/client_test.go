@@ -1,19 +1,23 @@
 package openrouter
 
 import (
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestClientStreaming(t *testing.T) {
-	// Skip test if no API key is set
-	if os.Getenv("OPENROUTER_API_KEY") == "" {
+	// Skip test if environment is not configured
+	env, err := NewEnvironment()
+	if err != nil {
 		t.Skip("OPENROUTER_API_KEY not set, skipping integration test")
 	}
 
-	client, err := NewClient()
+	config := &Config{
+		Model: "openai/gpt-3.5-turbo",
+	}
+	
+	client, err := NewClient(env, config)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

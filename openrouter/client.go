@@ -3,7 +3,6 @@ package openrouter
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/revrost/go-openrouter"
 )
@@ -22,18 +21,26 @@ const (
 
 type StreamHandler func(StreamEvent)
 
-type Client struct {
-	client *openrouter.Client
+type Config struct {
+	Model string
 }
 
-func NewClient() (*Client, error) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("OPENROUTER_API_KEY environment variable not set")
+type Client struct {
+	client *openrouter.Client
+	config *Config
+}
+
+func NewClient(env *Environment, config *Config) (*Client, error) {
+	if env == nil || env.APIKey == "" {
+		return nil, fmt.Errorf("valid environment is required")
+	}
+	if config == nil || config.Model == "" {
+		return nil, fmt.Errorf("valid config with model is required")
 	}
 
 	return &Client{
-		client: openrouter.NewClient(apiKey),
+		client: openrouter.NewClient(env.APIKey),
+		config: config,
 	}, nil
 }
 
@@ -43,7 +50,7 @@ func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
 	}
 
 	req := openrouter.ChatCompletionRequest{
-		Model:    "openai/gpt-3.5-turbo",
+		Model:    c.config.Model,
 		Messages: messages,
 		Stream:   true,
 	}
