@@ -4,11 +4,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/festeh/bro/environment"
 )
 
 func TestClientStreaming(t *testing.T) {
 	// Skip test if environment is not configured
-	env, err := NewEnvironment()
+	env, err := environment.NewEnvironment()
 	if err != nil {
 		t.Skip("OPENROUTER_API_KEY not set, skipping integration test")
 	}

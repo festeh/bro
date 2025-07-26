@@ -1,4 +1,4 @@
-package openrouter
+package environment
 
 import (
 	"fmt"

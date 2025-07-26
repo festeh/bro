@@ -6,9 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 )
-
 
 type App struct {
 	messages        []Message
@@ -22,16 +22,16 @@ type App struct {
 }
 
 func NewApp() App {
-	env, err := openrouter.NewEnvironment()
+	env, err := environment.NewEnvironment()
 	if err != nil {
 		fmt.Printf("Error initializing environment: %v\n", err)
 		return App{}
 	}
-	
+
 	config := &openrouter.Config{
-		Model: "openai/gpt-3.5-turbo",
+		Model: "qwen/qwen3-coder",
 	}
-	
+
 	client, err := openrouter.NewClient(env, config)
 	if err != nil {
 		fmt.Printf("Error initializing OpenRouter client: %v\n", err)
@@ -131,7 +131,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := openrouter.StreamEvent(msg)
 		for _, toolCall := range event.ToolCalls {
 			a.currentResponse += fmt.Sprintf("\n🔧 Executing %s: %s\n", toolCall.Function.Name, toolCall.Function.Arguments)
-			
+
 			result, err := ExecuteTool(a.client.GetToolRegistry(), toolCall.Function.Name, []byte(toolCall.Function.Arguments))
 			if err != nil {
 				a.currentResponse += fmt.Sprintf("Tool execution error: %s\n", err.Error())

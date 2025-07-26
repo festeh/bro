@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/revrost/go-openrouter"
+	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/tools"
 	"github.com/festeh/bro/tools/bash"
 )
@@ -46,7 +47,7 @@ type Client struct {
 	config *Config
 }
 
-func NewClient(env *Environment, config *Config) (*Client, error) {
+func NewClient(env *environment.Environment, config *Config) (*Client, error) {
 	if env == nil || env.APIKey == "" {
 		return nil, fmt.Errorf("valid environment is required")
 	}
