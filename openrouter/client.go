@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/revrost/go-openrouter"
+	"github.com/festeh/bro/tools"
+	"github.com/festeh/bro/tools/bash"
 )
 
 type StreamEvent struct {
@@ -35,7 +37,8 @@ const (
 type StreamHandler func(StreamEvent)
 
 type Config struct {
-	Model string
+	Model        string
+	ToolRegistry *tools.Registry
 }
 
 type Client struct {
@@ -51,10 +54,26 @@ func NewClient(env *Environment, config *Config) (*Client, error) {
 		return nil, fmt.Errorf("valid config with model is required")
 	}
 
+	// Create default tool registry with Bash tool if none provided
+	if config.ToolRegistry == nil {
+		config.ToolRegistry = tools.NewRegistry()
+		config.ToolRegistry.Register(bash.NewTool())
+	}
+
 	return &Client{
 		client: openrouter.NewClient(env.APIKey),
 		config: config,
 	}, nil
+}
+
+// SetToolRegistry updates the tool registry for this client
+func (c *Client) SetToolRegistry(registry *tools.Registry) {
+	c.config.ToolRegistry = registry
+}
+
+// GetToolRegistry returns the current tool registry
+func (c *Client) GetToolRegistry() *tools.Registry {
+	return c.config.ToolRegistry
 }
 
 func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
@@ -62,25 +81,8 @@ func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
 		{Role: "user", Content: openrouter.Content{Text: userInput}},
 	}
 
-	tools := []openrouter.Tool{
-		{
-			Type: openrouter.ToolTypeFunction,
-			Function: &openrouter.FunctionDefinition{
-				Name:        "bash",
-				Description: "Execute a bash command in the terminal and return the output",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"command": map[string]interface{}{
-							"type":        "string",
-							"description": "The bash command to execute",
-						},
-					},
-					"required": []string{"command"},
-				},
-			},
-		},
-	}
+	// Get tools from the client's registry
+	tools := c.config.ToolRegistry.GetDefinitions()
 
 	req := openrouter.ChatCompletionRequest{
 		Model:       c.config.Model,

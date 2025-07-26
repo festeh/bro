@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -131,22 +130,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamToolCallMsg:
 		event := openrouter.StreamEvent(msg)
 		for _, toolCall := range event.ToolCalls {
-			if toolCall.Function.Name == "bash" {
-				a.currentResponse += fmt.Sprintf("\n🔧 Executing: %s\n", toolCall.Function.Arguments)
-				
-				var args BashToolArgs
-				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-					result := ExecuteBashTool(args)
-					a.currentResponse += fmt.Sprintf("Exit code: %d\n", result.ExitCode)
-					if result.Stdout != "" {
-						a.currentResponse += fmt.Sprintf("Output:\n%s\n", result.Stdout)
+			a.currentResponse += fmt.Sprintf("\n🔧 Executing %s: %s\n", toolCall.Function.Name, toolCall.Function.Arguments)
+			
+			result, err := ExecuteTool(a.client.GetToolRegistry(), toolCall.Function.Name, []byte(toolCall.Function.Arguments))
+			if err != nil {
+				a.currentResponse += fmt.Sprintf("Tool execution error: %s\n", err.Error())
+			} else {
+				// Handle bash tool result specifically for display
+				if toolCall.Function.Name == "bash" {
+					if bashResult, ok := result.(BashToolResult); ok {
+						a.currentResponse += fmt.Sprintf("Exit code: %d\n", bashResult.ExitCode)
+						if bashResult.Stdout != "" {
+							a.currentResponse += fmt.Sprintf("Output:\n%s\n", bashResult.Stdout)
+						}
+						if bashResult.Stderr != "" {
+							a.currentResponse += fmt.Sprintf("Error output:\n%s\n", bashResult.Stderr)
+						}
+						if bashResult.Error != "" {
+							a.currentResponse += fmt.Sprintf("Execution error: %s\n", bashResult.Error)
+						}
 					}
-					if result.Stderr != "" {
-						a.currentResponse += fmt.Sprintf("Error output:\n%s\n", result.Stderr)
-					}
-					if result.Error != "" {
-						a.currentResponse += fmt.Sprintf("Execution error: %s\n", result.Error)
-					}
+				} else {
+					// Generic tool result display
+					a.currentResponse += fmt.Sprintf("Result: %+v\n", result)
 				}
 			}
 		}

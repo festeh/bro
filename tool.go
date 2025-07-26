@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"os/exec"
+	"fmt"
+	
+	"github.com/festeh/bro/tools"
+	"github.com/festeh/bro/tools/bash"
 )
 
 type ToolCall struct {
@@ -21,55 +24,24 @@ type ToolResult struct {
 	Content    string `json:"content"`
 }
 
-type BashToolArgs struct {
-	Command string `json:"command"`
+// ExecuteTool executes a tool by name with the given arguments using the provided registry
+func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
+	tool, exists := registry.Get(name)
+	if !exists {
+		return nil, fmt.Errorf("tool '%s' not found", name)
+	}
+	
+	return tool.Execute(args)
 }
 
-type BashToolResult struct {
-	Command  string `json:"command"`
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
-	ExitCode int    `json:"exit_code"`
-	Error    string `json:"error,omitempty"`
-}
+// Legacy functions for backward compatibility
+type BashToolArgs = bash.Args
+type BashToolResult = bash.Result
 
 func ExecuteBashTool(args BashToolArgs) BashToolResult {
-	cmd := exec.Command("bash", "-c", args.Command)
-	
-	stdout, err := cmd.Output()
-	result := BashToolResult{
-		Command:  args.Command,
-		Stdout:   string(stdout),
-		ExitCode: 0,
-	}
-	
-	if exitError, ok := err.(*exec.ExitError); ok {
-		result.ExitCode = exitError.ExitCode()
-		result.Stderr = string(exitError.Stderr)
-	} else if err != nil {
-		result.Error = err.Error()
-		result.ExitCode = -1
-	}
-	
-	return result
+	return bash.Execute(args)
 }
 
 func GetBashToolDefinition() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "function",
-		"function": map[string]interface{}{
-			"name":        "bash",
-			"description": "Execute a bash command in the terminal and return the output",
-			"parameters": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "The bash command to execute",
-					},
-				},
-				"required": []string{"command"},
-			},
-		},
-	}
+	return bash.GetDefinition()
 }
