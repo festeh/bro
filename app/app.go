@@ -24,15 +24,16 @@ const (
 )
 
 type App struct {
-	messages        []openrouter.Renderable
-	input           string
-	width           int
-	height          int
-	currentResponse string
-	isWaiting       bool
-	client          *openrouter.Client
-	eventChan       chan tea.Msg
-	scrollOffset    int // For scrolling through message history
+	messages         []openrouter.Renderable
+	input            string
+	width            int
+	height           int
+	currentResponse  string
+	pendingToolCalls []openrouter.ToolCall
+	isWaiting        bool
+	client           *openrouter.Client
+	eventChan        chan tea.Msg
+	scrollOffset     int // For scrolling through message history
 }
 
 
@@ -162,16 +163,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentResponse += string(msg)
 		return a, a.listenForEvents()
 	case streamDoneMsg:
-		a.messages = append(a.messages, openrouter.NewAssistantMessage(a.currentResponse))
-		a.resetToBottom()
-		return a, a.listenForEvents()
-	case streamErrorMsg:
-		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
-		a.resetToBottom()
-		return a, a.listenForEvents()
-	case streamToolCallMsg:
-		event := openrouter.StreamEvent(msg)
-		for _, toolCall := range event.ToolCalls {
+		// Add the AI response first
+		if a.currentResponse != "" {
+			a.messages = append(a.messages, openrouter.NewAssistantMessage(a.currentResponse))
+		}
+		
+		// Then execute any pending tool calls in order
+		for _, toolCall := range a.pendingToolCalls {
 			// Add tool call message
 			toolCallMsg := &openrouter.ToolCallMessage{ToolCall: toolCall}
 			a.messages = append(a.messages, toolCallMsg)
@@ -186,6 +184,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.messages = append(a.messages, toolResponseMsg)
 		}
+		
+		a.resetToBottom()
+		return a, a.listenForEvents()
+	case streamErrorMsg:
+		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
+		a.resetToBottom()
+		return a, a.listenForEvents()
+	case streamToolCallMsg:
+		event := openrouter.StreamEvent(msg)
+		// Buffer tool calls to execute after the AI response is complete
+		a.pendingToolCalls = append(a.pendingToolCalls, event.ToolCalls...)
 		return a, a.listenForEvents()
 	}
 	return a, nil
@@ -227,6 +236,7 @@ func (a App) calculateTotalLines() int {
 
 func (a *App) resetToBottom() {
 	a.currentResponse = ""
+	a.pendingToolCalls = nil
 	a.isWaiting = false
 	a.scrollOffset = 0
 }
