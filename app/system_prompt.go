@@ -19,5 +19,6 @@ func GenerateSystemPrompt() string {
 	return fmt.Sprintf(`Current time: %s
 OS: %s
 Working directory: %s
-You are helpful cli assistant`, currentTime, osInfo, currentDir)
+You are helpful CLI assistant called Bro that helps with SWE tasks or projects`,
+currentTime, osInfo, currentDir)
 }

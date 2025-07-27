@@ -35,8 +35,6 @@ type App struct {
 	scrollOffset    int // For scrolling through message history
 }
 
-// BashToolResult type alias for compatibility
-type BashToolResult = bash.Result
 
 // ExecuteTool executes a tool by name with the given arguments using the provided registry
 func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
@@ -181,7 +179,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// Handle bash tool result specifically for display
 				if toolCall.Function.Name == "bash" {
-					if bashResult, ok := result.(BashToolResult); ok {
+					if bashResult, ok := result.(bash.Result); ok {
 						a.currentResponse += fmt.Sprintf("Exit code: %d\n", bashResult.ExitCode)
 						if bashResult.Stdout != "" {
 							a.currentResponse += fmt.Sprintf("Output:\n%s\n", bashResult.Stdout)

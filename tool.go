@@ -36,9 +36,8 @@ func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (i
 
 // Legacy functions for backward compatibility
 type BashToolArgs = bash.Args
-type BashToolResult = bash.Result
 
-func ExecuteBashTool(args BashToolArgs) BashToolResult {
+func ExecuteBashTool(args BashToolArgs) bash.Result {
 	return bash.Execute(args)
 }
 
