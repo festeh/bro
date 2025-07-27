@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/log"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/festeh/bro/environment"
@@ -48,7 +49,7 @@ func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (i
 func NewApp() App {
 	env, err := environment.NewEnvironment()
 	if err != nil {
-		fmt.Printf("Error initializing environment: %v\n", err)
+		log.Error("Failed to initialize environment", "error", err)
 		return App{}
 	}
 
@@ -58,7 +59,7 @@ func NewApp() App {
 
 	client, err := openrouter.NewClient(env, config)
 	if err != nil {
-		fmt.Printf("Error initializing OpenRouter client: %v\n", err)
+		log.Error("Failed to initialize OpenRouter client", "error", err)
 		return App{}
 	}
 

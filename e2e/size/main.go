@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/log"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/festeh/bro/app"
 )
@@ -27,6 +28,6 @@ func main() {
 	p := tea.NewProgram(myApp)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v", err)
+		log.Error("Failed to run program", "error", err)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	
 	"github.com/festeh/bro/tools"
-	"github.com/festeh/bro/tools/bash"
 )
 
 type ToolCall struct {
