@@ -19,6 +19,7 @@ type App struct {
 	isWaiting       bool
 	client          *openrouter.Client
 	eventChan       chan tea.Msg
+	scrollOffset    int // For scrolling through message history
 }
 
 func NewApp() App {
@@ -76,14 +77,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			return a, tea.Quit
+		case "up":
+			if a.scrollOffset > 0 {
+				a.scrollOffset--
+			}
+		case "down":
+			// Calculate total content lines
+			chatHeight := a.height - 7
+			maxLines := chatHeight - 4
+			totalLines := a.calculateTotalLines()
+			if totalLines > maxLines {
+				maxScroll := totalLines - maxLines
+				if a.scrollOffset < maxScroll {
+					a.scrollOffset++
+				}
+			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
 				userMsg := Message{Role: RoleUser, Content: a.input}
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
+				a.scrollOffset = 0 // Auto-scroll to bottom when sending message
 
 				userInput := a.input
 				a.input = ""
@@ -121,11 +138,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: a.currentResponse})
 		a.currentResponse = ""
 		a.isWaiting = false
+		a.scrollOffset = 0 // Auto-scroll to bottom when message completes
 		return a, a.listenForEvents()
 	case streamErrorMsg:
 		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: fmt.Sprintf("Error: %v", msg)})
 		a.currentResponse = ""
 		a.isWaiting = false
+		a.scrollOffset = 0 // Auto-scroll to bottom on error
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
 		event := openrouter.StreamEvent(msg)
@@ -161,6 +180,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a App) calculateTotalLines() int {
+	totalLines := 0
+	for _, msg := range a.messages {
+		lines := strings.Split(msg.Content, "\n")
+		totalLines += len(lines)
+	}
+	if a.currentResponse != "" {
+		lines := strings.Split(a.currentResponse, "\n")
+		totalLines += len(lines)
+	}
+	return totalLines
+}
+
 func (a App) View() string {
 	if a.width == 0 || a.height == 0 {
 		return "Loading..."
@@ -186,31 +218,78 @@ func (a App) View() string {
 	if len(a.messages) == 0 {
 		chatContent = "No messages yet. Start typing below!"
 	} else {
-		maxMessages := chatHeight - 4
-		start := 0
-		if len(a.messages) > maxMessages {
-			start = len(a.messages) - maxMessages
-		}
-		for i := start; i < len(a.messages); i++ {
+		maxLines := chatHeight - 4
+		
+		// Build all content lines
+		var allLines []string
+		for _, msg := range a.messages {
 			prefix := "AI"
-			if a.messages[i].IsUser() {
+			if msg.IsUser() {
 				prefix = "You"
 			}
-			chatContent += fmt.Sprintf("%s: %s\n", prefix, a.messages[i].Content)
-		}
-
-		if a.currentResponse != "" {
-			chatContent += fmt.Sprintf("AI: %s", a.currentResponse)
-			if a.isWaiting {
-				chatContent += "▋"
+			lines := strings.Split(msg.Content, "\n")
+			for i, line := range lines {
+				if i == 0 {
+					allLines = append(allLines, fmt.Sprintf("%s: %s", prefix, line))
+				} else {
+					allLines = append(allLines, line)
+				}
 			}
-			chatContent += "\n"
+		}
+		
+		// Add current response if present
+		if a.currentResponse != "" {
+			lines := strings.Split(a.currentResponse, "\n")
+			for i, line := range lines {
+				if i == 0 {
+					content := fmt.Sprintf("AI: %s", line)
+					if a.isWaiting && i == len(lines)-1 {
+						content += "▋"
+					}
+					allLines = append(allLines, content)
+				} else {
+					content := line
+					if a.isWaiting && i == len(lines)-1 {
+						content += "▋"
+					}
+					allLines = append(allLines, content)
+				}
+			}
+		}
+		
+		// Apply scrolling
+		totalLines := len(allLines)
+		start := 0
+		if totalLines > maxLines {
+			start = totalLines - maxLines + a.scrollOffset
+		}
+		
+		if start < 0 {
+			start = 0
+		}
+		if start >= totalLines {
+			start = totalLines - 1
+		}
+		
+		end := start + maxLines
+		if end > totalLines {
+			end = totalLines
+		}
+		
+		for i := start; i < end; i++ {
+			chatContent += allLines[i] + "\n"
 		}
 	}
 
 	chat := chatStyle.Render(chatContent)
 	input := inputStyle.Render(fmt.Sprintf("> %s", a.input))
-	help := "Press 'q' or Ctrl+C to quit"
+	help := "Press Ctrl+C to quit"
+	
+	// Debug info
+	totalLines := a.calculateTotalLines()
+	maxLines := chatHeight - 4
+	debug := fmt.Sprintf("Debug: offset=%d, totalLines=%d, maxLines=%d", 
+		a.scrollOffset, totalLines, maxLines)
 
-	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help)
+	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help, debug)
 }
