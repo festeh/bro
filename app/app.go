@@ -342,7 +342,7 @@ func (a App) View() string {
 
 	chat := chatStyle.Render(chatContent)
 	input := inputStyle.Render(fmt.Sprintf("> %s", a.input))
-	help := "Press Ctrl+C to quit"
+	help := ""
 
 	// Debug info
 	totalLines := a.calculateTotalLines()
