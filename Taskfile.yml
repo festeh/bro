@@ -1,0 +1,11 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - go run main.go
+
+  test_scroll:
+    cmds:
+      - cd e2e/scroll && go build -o scroll main.go
+      - ~/projects/doubt/doubt -c e2e/scroll/config.json5 -o e2e/scroll

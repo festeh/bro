@@ -1,6 +1,7 @@
-package main
+package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
+	"github.com/festeh/bro/tools"
+	"github.com/festeh/bro/tools/bash"
 )
 
 type App struct {
@@ -20,6 +23,19 @@ type App struct {
 	client          *openrouter.Client
 	eventChan       chan tea.Msg
 	scrollOffset    int // For scrolling through message history
+}
+
+// BashToolResult type alias for compatibility
+type BashToolResult = bash.Result
+
+// ExecuteTool executes a tool by name with the given arguments using the provided registry
+func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
+	tool, exists := registry.Get(name)
+	if !exists {
+		return nil, fmt.Errorf("tool '%s' not found", name)
+	}
+	
+	return tool.Execute(args)
 }
 
 func NewApp() App {
@@ -84,10 +100,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return a, tea.Quit
 		case "up":
-			if a.scrollOffset > 0 {
-				a.scrollOffset--
-			}
-		case "down":
 			// Calculate total content lines
 			chatHeight := a.height - 7
 			maxLines := chatHeight - 4
@@ -97,6 +109,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if a.scrollOffset < maxScroll {
 					a.scrollOffset++
 				}
+			}
+		case "down":
+			if a.scrollOffset > 0 {
+				a.scrollOffset--
 			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
@@ -265,7 +281,7 @@ func (a App) View() string {
 		totalLines := len(allLines)
 		start := 0
 		if totalLines > maxLines {
-			start = totalLines - maxLines + a.scrollOffset
+			start = totalLines - maxLines - a.scrollOffset
 		}
 		
 		if start < 0 {
