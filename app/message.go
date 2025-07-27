@@ -29,3 +29,11 @@ type Message struct {
 func (m *Message) IsUser() bool {
 	return m.Role == RoleUser
 }
+
+func (m *Message) Render() string {
+	prefix := "AI"
+	if m.IsUser() {
+		prefix = "You"
+	}
+	return prefix + ": " + m.Content
+}

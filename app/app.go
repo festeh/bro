@@ -205,13 +205,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) calculateTotalLines() int {
+	_, chatWidth, _ := a.getChatDimensions()
+	if chatWidth <= 0 {
+		chatWidth = 80 // Default width
+	}
+
 	totalLines := 0
 	for _, msg := range a.messages {
-		totalLines += len(strings.Split(msg.Content, "\n"))
+		rendered := msg.Render()
+		lines := strings.Split(rendered, "\n")
+		for _, line := range lines {
+			totalLines += (len(line) + chatWidth - 1) / chatWidth // Ceiling division
+		}
 	}
+
 	if a.currentResponse != "" {
-		totalLines += len(strings.Split(a.currentResponse, "\n"))
+		currentMsg := &Message{Role: RoleAssistant, Content: a.currentResponse}
+		rendered := currentMsg.Render()
+		lines := strings.Split(rendered, "\n")
+		for _, line := range lines {
+			totalLines += (len(line) + chatWidth - 1) / chatWidth
+		}
 	}
+
 	return totalLines
 }
 
@@ -244,7 +260,6 @@ func (a App) View() string {
 	inputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(BORDER_COLOR_INPUT)).
-		Padding(0, 1).
 		Width(chatWidth)
 
 	chatContent := ""
@@ -255,37 +270,22 @@ func (a App) View() string {
 		// Build all content lines
 		var allLines []string
 		for _, msg := range a.messages {
-			prefix := "AI"
-			if msg.IsUser() {
-				prefix = "You"
-			}
-			lines := strings.Split(msg.Content, "\n")
-			for i, line := range lines {
-				if i == 0 {
-					allLines = append(allLines, fmt.Sprintf("%s: %s", prefix, line))
-				} else {
-					allLines = append(allLines, line)
-				}
-			}
+			rendered := msg.Render()
+			lines := strings.Split(rendered, "\n")
+			allLines = append(allLines, lines...)
 		}
 
 		// Add current response if present
 		if a.currentResponse != "" {
-			lines := strings.Split(a.currentResponse, "\n")
+			currentMsg := &Message{Role: RoleAssistant, Content: a.currentResponse}
+			rendered := currentMsg.Render()
+			lines := strings.Split(rendered, "\n")
 			for i, line := range lines {
-				if i == 0 {
-					content := fmt.Sprintf("AI: %s", line)
-					if a.isWaiting && i == len(lines)-1 {
-						content += CURSOR_CHAR
-					}
-					allLines = append(allLines, content)
-				} else {
-					content := line
-					if a.isWaiting && i == len(lines)-1 {
-						content += CURSOR_CHAR
-					}
-					allLines = append(allLines, content)
+				content := line
+				if a.isWaiting && i == len(lines)-1 {
+					content += CURSOR_CHAR
 				}
+				allLines = append(allLines, content)
 			}
 		}
 
