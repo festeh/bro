@@ -204,6 +204,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a App) calculateLinesFromContent(content string, chatWidth int) int {
+	lines := strings.Split(content, "\n")
+	totalLines := 0
+	for _, line := range lines {
+		if len(line) == 0 {
+			totalLines += 1 // Empty lines take 1 screen line
+		} else {
+			totalLines += (len(line) + chatWidth - 1) / chatWidth // Ceiling division
+		}
+	}
+	return totalLines
+}
+
 func (a App) calculateTotalLines() int {
 	_, chatWidth, _ := a.getChatDimensions()
 	if chatWidth <= 0 {
@@ -213,19 +226,13 @@ func (a App) calculateTotalLines() int {
 	totalLines := 0
 	for _, msg := range a.messages {
 		rendered := msg.Render()
-		lines := strings.Split(rendered, "\n")
-		for _, line := range lines {
-			totalLines += (len(line) + chatWidth - 1) / chatWidth // Ceiling division
-		}
+		totalLines += a.calculateLinesFromContent(rendered, chatWidth)
 	}
 
 	if a.currentResponse != "" {
 		currentMsg := &Message{Role: RoleAssistant, Content: a.currentResponse}
 		rendered := currentMsg.Render()
-		lines := strings.Split(rendered, "\n")
-		for _, line := range lines {
-			totalLines += (len(line) + chatWidth - 1) / chatWidth
-		}
+		totalLines += a.calculateLinesFromContent(rendered, chatWidth)
 	}
 
 	return totalLines
