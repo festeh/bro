@@ -2,7 +2,9 @@ package openrouter
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/revrost/go-openrouter"
 	"github.com/festeh/bro/environment"
@@ -112,7 +114,7 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 	for {
 		response, err := stream.Recv()
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				handler(StreamEvent{Type: StreamEventDone})
 				return
 			}
