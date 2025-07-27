@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/charmbracelet/log"
 	"github.com/revrost/go-openrouter"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/tools"
@@ -133,8 +134,10 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 			}
 			
 			if len(choice.Delta.ToolCalls) > 0 {
+				log.Info("Received tool call delta", "count", len(choice.Delta.ToolCalls))
 				var toolCalls []ToolCall
-				for _, tc := range choice.Delta.ToolCalls {
+				for i, tc := range choice.Delta.ToolCalls {
+					log.Info("Tool call delta", "index", i, "id", tc.ID, "type", tc.Type, "function_name", tc.Function.Name, "arguments", tc.Function.Arguments)
 					toolCalls = append(toolCalls, ToolCall{
 						ID:   tc.ID,
 						Type: string(tc.Type),

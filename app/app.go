@@ -24,7 +24,7 @@ const (
 )
 
 type App struct {
-	messages        []*ChatMessage
+	messages        []openrouter.Renderable
 	input           string
 	width           int
 	height          int
@@ -64,8 +64,8 @@ func NewApp() App {
 	}
 
 	systemPrompt := GenerateSystemPrompt()
-	initialMessages := []*ChatMessage{
-		NewSystemMessage(systemPrompt),
+	initialMessages := []openrouter.Renderable{
+		openrouter.NewSystemMessage(systemPrompt),
 	}
 
 	return App{
@@ -76,9 +76,10 @@ func NewApp() App {
 	}
 }
 
-func (a *App) SetMessages(messages []*ChatMessage) {
+func (a *App) SetMessages(messages []openrouter.Renderable) {
 	a.messages = messages
 }
+
 
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
@@ -122,7 +123,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
-				userMsg := NewUserMessage(a.input)
+				userMsg := openrouter.NewUserMessage(a.input)
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
@@ -131,7 +132,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.input = ""
 
 				return a, func() tea.Msg {
-					openrouterMessages := ChatMessagesToOpenRouter(a.messages)
+					openrouterMessages := openrouter.ChatMessagesToOpenRouter(a.messages)
 					err := a.client.SendMessages(openrouterMessages, func(event openrouter.StreamEvent) {
 						switch event.Type {
 						case openrouter.StreamEventChunk:
@@ -161,30 +162,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentResponse += string(msg)
 		return a, a.listenForEvents()
 	case streamDoneMsg:
-		a.messages = append(a.messages, NewAssistantMessage(a.currentResponse))
+		a.messages = append(a.messages, openrouter.NewAssistantMessage(a.currentResponse))
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
-		a.messages = append(a.messages, NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
+		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
 		event := openrouter.StreamEvent(msg)
 		for _, toolCall := range event.ToolCalls {
-			a.currentResponse += fmt.Sprintf("\n🔧 Executing %s: %s\n", toolCall.Function.Name, toolCall.Function.Arguments)
+			// Add tool call message
+			toolCallMsg := &openrouter.ToolCallMessage{ToolCall: toolCall}
+			a.messages = append(a.messages, toolCallMsg)
 
+			// Execute tool and add response message
 			result, err := ExecuteTool(a.client.GetToolRegistry(), toolCall.Function.Name, []byte(toolCall.Function.Arguments))
-			if err != nil {
-				a.currentResponse += fmt.Sprintf("Tool execution error: %s\n", err.Error())
-			} else {
-				// All tools now return formatted assistant messages
-				if message, ok := result.(string); ok {
-					a.currentResponse += message + "\n"
-				} else {
-					// Fallback for any tools that still return structured data
-					a.currentResponse += fmt.Sprintf("Result: %+v\n", result)
-				}
+			toolResponseMsg := &openrouter.ToolResponseMessage{
+				ToolCallID: toolCall.ID,
+				ToolName:   toolCall.Function.Name,
+				Result:     result,
+				Error:      err,
 			}
+			a.messages = append(a.messages, toolResponseMsg)
 		}
 		return a, a.listenForEvents()
 	}
@@ -217,7 +217,7 @@ func (a App) calculateTotalLines() int {
 	}
 
 	if a.currentResponse != "" {
-		currentMsg := NewAssistantMessage(a.currentResponse)
+		currentMsg := openrouter.NewAssistantMessage(a.currentResponse)
 		rendered := currentMsg.Render()
 		totalLines += a.calculateLinesFromContent(rendered, chatWidth)
 	}
@@ -271,7 +271,7 @@ func (a App) View() string {
 
 		// Add current response if present
 		if a.currentResponse != "" {
-			currentMsg := NewAssistantMessage(a.currentResponse)
+			currentMsg := openrouter.NewAssistantMessage(a.currentResponse)
 			rendered := currentMsg.Render()
 			lines := strings.Split(rendered, "\n")
 			for i, line := range lines {

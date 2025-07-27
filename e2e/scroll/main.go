@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/festeh/bro/app"
+	"github.com/festeh/bro/openrouter"
 )
 
 func main() {
@@ -19,9 +20,9 @@ func main() {
 	}
 	numbersContent := strings.Join(numbers, "\n")
 	
-	initialMessages := []*app.ChatMessage{
-		app.NewSystemMessage(app.GenerateSystemPrompt()),
-		app.NewUserMessage(numbersContent),
+	initialMessages := []openrouter.Renderable{
+		openrouter.NewSystemMessage(app.GenerateSystemPrompt()),
+		openrouter.NewUserMessage(numbersContent),
 	}
 	
 	myApp.SetMessages(initialMessages)
