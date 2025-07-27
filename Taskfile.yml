@@ -9,3 +9,8 @@ tasks:
     cmds:
       - cd e2e/scroll && go build -o scroll main.go
       - ~/projects/doubt/doubt -c e2e/scroll/config.json5 -o e2e/scroll
+
+  test_size:
+    cmds:
+      - cd e2e/size && go build -o size main.go
+      - ~/projects/doubt/doubt -c e2e/size/config.json5 -o e2e/size

@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	INPUT_HEIGHT         = 7
-	CHAT_PADDING        = 4
-	CHAT_BORDER_WIDTH   = 2
-	EVENT_CHAN_BUFFER   = 100
-	BORDER_COLOR_CHAT   = "62"
-	BORDER_COLOR_INPUT  = "205"
-	CURSOR_CHAR         = "▋"
+	INPUT_HEIGHT       = 7
+	CHAT_PADDING       = 0
+	CHAT_BORDER_WIDTH  = 2
+	EVENT_CHAN_BUFFER  = 100
+	BORDER_COLOR_CHAT  = "62"
+	BORDER_COLOR_INPUT = "205"
+	CURSOR_CHAR        = "▋"
 )
 
 type App struct {
@@ -44,7 +44,7 @@ func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (i
 	if !exists {
 		return nil, fmt.Errorf("tool '%s' not found", name)
 	}
-	
+
 	return tool.Execute(args)
 }
 
@@ -113,7 +113,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_, _, maxLines := a.getChatDimensions()
 			totalLines := a.calculateTotalLines()
 			if totalLines > maxLines {
-				maxScroll := totalLines - maxLines
+				maxScroll := totalLines - maxLines + 1
 				if a.scrollOffset < maxScroll {
 					a.scrollOffset++
 				}
@@ -238,7 +238,6 @@ func (a App) View() string {
 	chatStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(BORDER_COLOR_CHAT)).
-		Padding(1).
 		Width(chatWidth).
 		Height(chatHeight)
 
@@ -252,7 +251,7 @@ func (a App) View() string {
 	if len(a.messages) == 0 {
 		chatContent = "No messages yet. Start typing below!"
 	} else {
-		
+
 		// Build all content lines
 		var allLines []string
 		for _, msg := range a.messages {
@@ -269,7 +268,7 @@ func (a App) View() string {
 				}
 			}
 		}
-		
+
 		// Add current response if present
 		if a.currentResponse != "" {
 			lines := strings.Split(a.currentResponse, "\n")
@@ -289,38 +288,41 @@ func (a App) View() string {
 				}
 			}
 		}
-		
+
 		// Apply scrolling
 		totalLines := len(allLines)
 		start := 0
 		if totalLines > maxLines {
 			start = totalLines - maxLines - a.scrollOffset
 		}
-		
+
 		if start < 0 {
 			start = 0
 		}
 		if start >= totalLines {
 			start = totalLines - 1
 		}
-		
+
 		end := start + maxLines
 		if end > totalLines {
 			end = totalLines
 		}
-		
+
+		var visibleLines []string
 		for i := start; i < end; i++ {
-			chatContent += allLines[i] + "\n"
+			visibleLines = append(visibleLines, allLines[i])
 		}
+
+		chatContent = strings.Join(visibleLines, "\n")
 	}
 
 	chat := chatStyle.Render(chatContent)
 	input := inputStyle.Render(fmt.Sprintf("> %s", a.input))
 	help := "Press Ctrl+C to quit"
-	
+
 	// Debug info
 	totalLines := a.calculateTotalLines()
-	debug := fmt.Sprintf("Debug: offset=%d, totalLines=%d, maxLines=%d", 
+	debug := fmt.Sprintf("Debug: offset=%d, totalLines=%d, maxLines=%d",
 		a.scrollOffset, totalLines, maxLines)
 
 	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help, debug)
