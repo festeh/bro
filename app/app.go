@@ -13,6 +13,16 @@ import (
 	"github.com/festeh/bro/tools/bash"
 )
 
+const (
+	INPUT_HEIGHT         = 7
+	CHAT_PADDING        = 4
+	CHAT_BORDER_WIDTH   = 2
+	EVENT_CHAN_BUFFER   = 100
+	BORDER_COLOR_CHAT   = "62"
+	BORDER_COLOR_INPUT  = "205"
+	CURSOR_CHAR         = "▋"
+)
+
 type App struct {
 	messages        []Message
 	input           string
@@ -64,7 +74,7 @@ func NewApp() App {
 		messages:  initialMessages,
 		input:     "",
 		client:    client,
-		eventChan: make(chan tea.Msg, 100),
+		eventChan: make(chan tea.Msg, EVENT_CHAN_BUFFER),
 	}
 }
 
@@ -100,9 +110,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return a, tea.Quit
 		case "up":
-			// Calculate total content lines
-			chatHeight := a.height - 7
-			maxLines := chatHeight - 4
+			_, _, maxLines := a.getChatDimensions()
 			totalLines := a.calculateTotalLines()
 			if totalLines > maxLines {
 				maxScroll := totalLines - maxLines
@@ -120,7 +128,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
-				a.scrollOffset = 0 // Auto-scroll to bottom when sending message
+				a.scrollOffset = 0
 
 				userInput := a.input
 				a.input = ""
@@ -156,15 +164,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.listenForEvents()
 	case streamDoneMsg:
 		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: a.currentResponse})
-		a.currentResponse = ""
-		a.isWaiting = false
-		a.scrollOffset = 0 // Auto-scroll to bottom when message completes
+		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
 		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: fmt.Sprintf("Error: %v", msg)})
-		a.currentResponse = ""
-		a.isWaiting = false
-		a.scrollOffset = 0 // Auto-scroll to bottom on error
+		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
 		event := openrouter.StreamEvent(msg)
@@ -203,14 +207,25 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) calculateTotalLines() int {
 	totalLines := 0
 	for _, msg := range a.messages {
-		lines := strings.Split(msg.Content, "\n")
-		totalLines += len(lines)
+		totalLines += len(strings.Split(msg.Content, "\n"))
 	}
 	if a.currentResponse != "" {
-		lines := strings.Split(a.currentResponse, "\n")
-		totalLines += len(lines)
+		totalLines += len(strings.Split(a.currentResponse, "\n"))
 	}
 	return totalLines
+}
+
+func (a *App) resetToBottom() {
+	a.currentResponse = ""
+	a.isWaiting = false
+	a.scrollOffset = 0
+}
+
+func (a App) getChatDimensions() (chatHeight, chatWidth, maxLines int) {
+	chatHeight = a.height - INPUT_HEIGHT
+	chatWidth = a.width - CHAT_BORDER_WIDTH
+	maxLines = chatHeight - CHAT_PADDING
+	return
 }
 
 func (a App) View() string {
@@ -218,19 +233,18 @@ func (a App) View() string {
 		return "Loading..."
 	}
 
-	chatHeight := a.height - 7
-	chatWidth := a.width - 2
+	chatHeight, chatWidth, maxLines := a.getChatDimensions()
 
 	chatStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
+		BorderForeground(lipgloss.Color(BORDER_COLOR_CHAT)).
 		Padding(1).
 		Width(chatWidth).
 		Height(chatHeight)
 
 	inputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("205")).
+		BorderForeground(lipgloss.Color(BORDER_COLOR_INPUT)).
 		Padding(0, 1).
 		Width(chatWidth)
 
@@ -238,7 +252,6 @@ func (a App) View() string {
 	if len(a.messages) == 0 {
 		chatContent = "No messages yet. Start typing below!"
 	} else {
-		maxLines := chatHeight - 4
 		
 		// Build all content lines
 		var allLines []string
@@ -264,13 +277,13 @@ func (a App) View() string {
 				if i == 0 {
 					content := fmt.Sprintf("AI: %s", line)
 					if a.isWaiting && i == len(lines)-1 {
-						content += "▋"
+						content += CURSOR_CHAR
 					}
 					allLines = append(allLines, content)
 				} else {
 					content := line
 					if a.isWaiting && i == len(lines)-1 {
-						content += "▋"
+						content += CURSOR_CHAR
 					}
 					allLines = append(allLines, content)
 				}
@@ -307,7 +320,6 @@ func (a App) View() string {
 	
 	// Debug info
 	totalLines := a.calculateTotalLines()
-	maxLines := chatHeight - 4
 	debug := fmt.Sprintf("Debug: offset=%d, totalLines=%d, maxLines=%d", 
 		a.scrollOffset, totalLines, maxLines)
 
