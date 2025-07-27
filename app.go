@@ -52,6 +52,10 @@ func NewApp() App {
 	}
 }
 
+func (a *App) SetMessages(messages []Message) {
+	a.messages = messages
+}
+
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg { return nil },
