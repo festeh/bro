@@ -19,8 +19,8 @@ func main() {
 	}
 	numbersContent := strings.Join(numbers, "")
 
-	initialMessages := []app.Message{
-		{Role: app.RoleUser, Content: numbersContent},
+	initialMessages := []*app.ChatMessage{
+		app.NewUserMessage(numbersContent),
 	}
 
 	myApp.SetMessages(initialMessages)

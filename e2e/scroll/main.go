@@ -19,9 +19,9 @@ func main() {
 	}
 	numbersContent := strings.Join(numbers, "\n")
 	
-	initialMessages := []app.Message{
-		{Role: app.RoleSystem, Content: app.GenerateSystemPrompt()},
-		{Role: app.RoleUser, Content: numbersContent},
+	initialMessages := []*app.ChatMessage{
+		app.NewSystemMessage(app.GenerateSystemPrompt()),
+		app.NewUserMessage(numbersContent),
 	}
 	
 	myApp.SetMessages(initialMessages)

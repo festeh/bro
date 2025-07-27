@@ -2,55 +2,50 @@ package app
 
 import "github.com/revrost/go-openrouter"
 
-type Role int
-
-const (
-	RoleUser Role = iota
-	RoleAssistant
-	RoleSystem
-)
-
-func (r Role) String() string {
-	switch r {
-	case RoleUser:
-		return "user"
-	case RoleAssistant:
-		return "assistant"
-	case RoleSystem:
-		return "system"
-	default:
-		return "unknown"
-	}
+type Renderable interface {
+	Render() string
+	IsUser() bool
 }
 
-type Message struct {
-	Role    Role
-	Content string
+type ChatMessage openrouter.ChatCompletionMessage
+
+func (m *ChatMessage) IsUser() bool {
+	return m.Role == "user"
 }
 
-func (m *Message) IsUser() bool {
-	return m.Role == RoleUser
-}
-
-func (m *Message) Render() string {
+func (m *ChatMessage) Render() string {
 	prefix := "AI"
 	if m.IsUser() {
 		prefix = "You"
 	}
-	return prefix + ": " + m.Content
+	return prefix + ": " + m.Content.Text
 }
 
-func (m *Message) ToOpenRouterMessage() openrouter.ChatCompletionMessage {
-	return openrouter.ChatCompletionMessage{
-		Role:    m.Role.String(),
-		Content: openrouter.Content{Text: m.Content},
+func NewUserMessage(content string) *ChatMessage {
+	return &ChatMessage{
+		Role:    "user",
+		Content: openrouter.Content{Text: content},
 	}
 }
 
-func MessagesToOpenRouter(messages []Message) []openrouter.ChatCompletionMessage {
+func NewAssistantMessage(content string) *ChatMessage {
+	return &ChatMessage{
+		Role:    "assistant",
+		Content: openrouter.Content{Text: content},
+	}
+}
+
+func NewSystemMessage(content string) *ChatMessage {
+	return &ChatMessage{
+		Role:    "system",
+		Content: openrouter.Content{Text: content},
+	}
+}
+
+func ChatMessagesToOpenRouter(messages []*ChatMessage) []openrouter.ChatCompletionMessage {
 	var result []openrouter.ChatCompletionMessage
 	for _, msg := range messages {
-		result = append(result, msg.ToOpenRouterMessage())
+		result = append(result, openrouter.ChatCompletionMessage(*msg))
 	}
 	return result
 }

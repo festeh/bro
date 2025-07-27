@@ -24,7 +24,7 @@ const (
 )
 
 type App struct {
-	messages        []Message
+	messages        []*ChatMessage
 	input           string
 	width           int
 	height          int
@@ -64,8 +64,8 @@ func NewApp() App {
 	}
 
 	systemPrompt := GenerateSystemPrompt()
-	initialMessages := []Message{
-		{Role: RoleSystem, Content: systemPrompt},
+	initialMessages := []*ChatMessage{
+		NewSystemMessage(systemPrompt),
 	}
 
 	return App{
@@ -76,7 +76,7 @@ func NewApp() App {
 	}
 }
 
-func (a *App) SetMessages(messages []Message) {
+func (a *App) SetMessages(messages []*ChatMessage) {
 	a.messages = messages
 }
 
@@ -122,7 +122,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
-				userMsg := Message{Role: RoleUser, Content: a.input}
+				userMsg := NewUserMessage(a.input)
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
 				a.isWaiting = true
@@ -131,7 +131,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.input = ""
 
 				return a, func() tea.Msg {
-					openrouterMessages := MessagesToOpenRouter(a.messages)
+					openrouterMessages := ChatMessagesToOpenRouter(a.messages)
 					err := a.client.SendMessages(openrouterMessages, func(event openrouter.StreamEvent) {
 						switch event.Type {
 						case openrouter.StreamEventChunk:
@@ -161,11 +161,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentResponse += string(msg)
 		return a, a.listenForEvents()
 	case streamDoneMsg:
-		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: a.currentResponse})
+		a.messages = append(a.messages, NewAssistantMessage(a.currentResponse))
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
-		a.messages = append(a.messages, Message{Role: RoleAssistant, Content: fmt.Sprintf("Error: %v", msg)})
+		a.messages = append(a.messages, NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
@@ -217,7 +217,7 @@ func (a App) calculateTotalLines() int {
 	}
 
 	if a.currentResponse != "" {
-		currentMsg := &Message{Role: RoleAssistant, Content: a.currentResponse}
+		currentMsg := NewAssistantMessage(a.currentResponse)
 		rendered := currentMsg.Render()
 		totalLines += a.calculateLinesFromContent(rendered, chatWidth)
 	}
@@ -271,7 +271,7 @@ func (a App) View() string {
 
 		// Add current response if present
 		if a.currentResponse != "" {
-			currentMsg := &Message{Role: RoleAssistant, Content: a.currentResponse}
+			currentMsg := NewAssistantMessage(a.currentResponse)
 			rendered := currentMsg.Render()
 			lines := strings.Split(rendered, "\n")
 			for i, line := range lines {
