@@ -128,11 +128,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.isWaiting = true
 				a.scrollOffset = 0
 
-				userInput := a.input
 				a.input = ""
 
 				return a, func() tea.Msg {
-					err := a.client.SendMessage(userInput, func(event openrouter.StreamEvent) {
+					openrouterMessages := MessagesToOpenRouter(a.messages)
+					err := a.client.SendMessages(openrouterMessages, func(event openrouter.StreamEvent) {
 						switch event.Type {
 						case openrouter.StreamEventChunk:
 							a.eventChan <- streamChunkMsg(event.Content)

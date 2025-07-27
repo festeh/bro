@@ -79,10 +79,7 @@ func (c *Client) GetToolRegistry() *tools.Registry {
 	return c.config.ToolRegistry
 }
 
-func (c *Client) SendMessage(userInput string, handler StreamHandler) error {
-	messages := []openrouter.ChatCompletionMessage{
-		{Role: "user", Content: openrouter.Content{Text: userInput}},
-	}
+func (c *Client) SendMessages(messages []openrouter.ChatCompletionMessage, handler StreamHandler) error {
 
 	// Get tools from the client's registry
 	tools := c.config.ToolRegistry.GetDefinitions()

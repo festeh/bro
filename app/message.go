@@ -1,5 +1,7 @@
 package app
 
+import "github.com/revrost/go-openrouter"
+
 type Role int
 
 const (
@@ -36,4 +38,19 @@ func (m *Message) Render() string {
 		prefix = "You"
 	}
 	return prefix + ": " + m.Content
+}
+
+func (m *Message) ToOpenRouterMessage() openrouter.ChatCompletionMessage {
+	return openrouter.ChatCompletionMessage{
+		Role:    m.Role.String(),
+		Content: openrouter.Content{Text: m.Content},
+	}
+}
+
+func MessagesToOpenRouter(messages []Message) []openrouter.ChatCompletionMessage {
+	var result []openrouter.ChatCompletionMessage
+	for _, msg := range messages {
+		result = append(result, msg.ToOpenRouterMessage())
+	}
+	return result
 }
