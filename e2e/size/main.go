@@ -13,10 +13,10 @@ func main() {
 
 	// Create initial message with numbers 1-30 separated by newlines
 	var numbers []string
-	for i := 1; i <= 28; i++ {
-		numbers = append(numbers, fmt.Sprintf("%d", i))
+	for i := 1; i <= 10; i++ {
+		numbers = append(numbers, fmt.Sprintf("%d\n\n", i))
 	}
-	numbersContent := strings.Join(numbers, "\n")
+	numbersContent := strings.Join(numbers, "")
 
 	initialMessages := []app.Message{
 		{Role: app.RoleUser, Content: numbersContent},

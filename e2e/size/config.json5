@@ -1,6 +1,6 @@
 {
     executable_path: "e2e/size/size",
-    description: "Let's test app scrolling. I prepared an automated test that presses up a few times. I expect that content of the page will be scrolled up and reveal new numbers. To run the test: task test_scroll. Then in e2e/scroll you'll find initial.png and final.png. Your goal is to ensure that screen in final.png is scrolled. Work on scrolling until it's fixed and in final.png you see satidfying results",
+    description: "I prepared an automated test. To run the test: task test_size. Then in e2e/size you'll find initial.png. Your goal is to ensure that totalLines is not 10, mind the empty newlines too, as each occupy a screen line. Work on task until it's fixed and you see satisfying results",
     commands: [
       {
         type: "sleep",
@@ -14,5 +14,11 @@
           filename: "initial.png"
         }
       },
+      { 
+        type: "keypress",
+        keypress: {
+          key: "ctrl-c"
+        }
+      }
   ]
 }

@@ -296,8 +296,25 @@ func (a App) View() string {
 			}
 		}
 
-		// Apply scrolling
-		totalLines := len(allLines)
+		// First wrap all lines to get complete wrapped content
+		var allWrappedLines []string
+		for _, line := range allLines {
+			if len(line) <= chatWidth {
+				allWrappedLines = append(allWrappedLines, line)
+			} else {
+				// Wrap long lines
+				for len(line) > chatWidth {
+					allWrappedLines = append(allWrappedLines, line[:chatWidth])
+					line = line[chatWidth:]
+				}
+				if len(line) > 0 {
+					allWrappedLines = append(allWrappedLines, line)
+				}
+			}
+		}
+
+		// Apply scrolling based on wrapped line count
+		totalLines := len(allWrappedLines)
 		start := 0
 		if totalLines > maxLines {
 			start = totalLines - maxLines - a.scrollOffset
@@ -317,7 +334,7 @@ func (a App) View() string {
 
 		var visibleLines []string
 		for i := start; i < end; i++ {
-			visibleLines = append(visibleLines, allLines[i])
+			visibleLines = append(visibleLines, allWrappedLines[i])
 		}
 
 		chatContent = strings.Join(visibleLines, "\n")
