@@ -8,6 +8,7 @@ import (
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/tools"
 	"github.com/festeh/bro/tools/bash"
+	"github.com/festeh/bro/tools/filefinder"
 )
 
 type StreamEvent struct {
@@ -55,10 +56,11 @@ func NewClient(env *environment.Environment, config *Config) (*Client, error) {
 		return nil, fmt.Errorf("valid config with model is required")
 	}
 
-	// Create default tool registry with Bash tool if none provided
+	// Create default tool registry with tools if none provided
 	if config.ToolRegistry == nil {
 		config.ToolRegistry = tools.NewRegistry()
 		config.ToolRegistry.Register(bash.NewTool())
+		config.ToolRegistry.Register(filefinder.NewTool())
 	}
 
 	return &Client{

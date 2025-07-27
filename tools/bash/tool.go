@@ -2,7 +2,9 @@ package bash
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/revrost/go-openrouter"
 )
@@ -47,21 +49,32 @@ func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
 	cmd := exec.Command("bash", "-c", bashArgs.Command)
 	
 	stdout, err := cmd.Output()
-	result := Result{
-		Command:  bashArgs.Command,
-		Stdout:   string(stdout),
-		ExitCode: 0,
-	}
+	
+	// Build assistant message response
+	var message strings.Builder
 	
 	if exitError, ok := err.(*exec.ExitError); ok {
-		result.ExitCode = exitError.ExitCode()
-		result.Stderr = string(exitError.Stderr)
+		// Command failed with non-zero exit code
+		message.WriteString(fmt.Sprintf("Command failed with exit code %d:\n", exitError.ExitCode()))
+		if stderr := string(exitError.Stderr); stderr != "" {
+			message.WriteString(fmt.Sprintf("Error: %s\n", stderr))
+		}
+		if stdout := string(stdout); stdout != "" {
+			message.WriteString(fmt.Sprintf("Output: %s\n", stdout))
+		}
 	} else if err != nil {
-		result.Error = err.Error()
-		result.ExitCode = -1
+		// Execution error
+		message.WriteString(fmt.Sprintf("Execution error: %s", err.Error()))
+	} else {
+		// Success
+		if output := string(stdout); output != "" {
+			message.WriteString(strings.TrimSpace(output))
+		} else {
+			message.WriteString("Command completed successfully (no output)")
+		}
 	}
 	
-	return result, nil
+	return message.String(), nil
 }
 
 // GetDefinition returns the OpenRouter tool definition
@@ -85,27 +98,3 @@ func (t *Tool) GetDefinition() openrouter.Tool {
 	}
 }
 
-// Legacy functions for backward compatibility
-func Execute(args Args) Result {
-	tool := NewTool()
-	result, _ := tool.Execute(mustMarshal(args))
-	return result.(Result)
-}
-
-func GetDefinition() map[string]interface{} {
-	tool := NewTool()
-	def := tool.GetDefinition()
-	return map[string]interface{}{
-		"type": string(def.Type),
-		"function": map[string]interface{}{
-			"name":        def.Function.Name,
-			"description": def.Function.Description,
-			"parameters":  def.Function.Parameters,
-		},
-	}
-}
-
-func mustMarshal(v interface{}) json.RawMessage {
-	data, _ := json.Marshal(v)
-	return data
-}

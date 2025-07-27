@@ -10,7 +10,6 @@ import (
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 	"github.com/festeh/bro/tools"
-	"github.com/festeh/bro/tools/bash"
 )
 
 const (
@@ -177,22 +176,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				a.currentResponse += fmt.Sprintf("Tool execution error: %s\n", err.Error())
 			} else {
-				// Handle bash tool result specifically for display
-				if toolCall.Function.Name == "bash" {
-					if bashResult, ok := result.(bash.Result); ok {
-						a.currentResponse += fmt.Sprintf("Exit code: %d\n", bashResult.ExitCode)
-						if bashResult.Stdout != "" {
-							a.currentResponse += fmt.Sprintf("Output:\n%s\n", bashResult.Stdout)
-						}
-						if bashResult.Stderr != "" {
-							a.currentResponse += fmt.Sprintf("Error output:\n%s\n", bashResult.Stderr)
-						}
-						if bashResult.Error != "" {
-							a.currentResponse += fmt.Sprintf("Execution error: %s\n", bashResult.Error)
-						}
-					}
+				// All tools now return formatted assistant messages
+				if message, ok := result.(string); ok {
+					a.currentResponse += message + "\n"
 				} else {
-					// Generic tool result display
+					// Fallback for any tools that still return structured data
 					a.currentResponse += fmt.Sprintf("Result: %+v\n", result)
 				}
 			}

@@ -64,10 +64,10 @@ func TestBashToolWithAI(t *testing.T) {
 				if err != nil {
 					model.error = err.Error()
 					model.hasError = true
-				} else if bashResult, ok := result.(bash.Result); ok {
-					model.bashOutput = bashResult.Stdout
-					t.Logf("Bash command executed: %s", bashResult.Command)
-					t.Logf("Bash output: %s", bashResult.Stdout)
+				} else if message, ok := result.(string); ok {
+					model.bashOutput = message
+					t.Logf("Bash tool executed")
+					t.Logf("Bash message: %s", message)
 				}
 			}
 			model.completed = true
