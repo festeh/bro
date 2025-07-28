@@ -10,7 +10,10 @@ import (
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/tools"
 	"github.com/festeh/bro/tools/bash"
+	"github.com/festeh/bro/tools/fileedit"
 	"github.com/festeh/bro/tools/filefinder"
+	"github.com/festeh/bro/tools/grep"
+	"github.com/festeh/bro/tools/readfile"
 	"github.com/revrost/go-openrouter"
 )
 
@@ -64,7 +67,10 @@ func NewClient(env *environment.Environment, config *Config) (*Client, error) {
 	if config.ToolRegistry == nil {
 		config.ToolRegistry = tools.NewRegistry()
 		config.ToolRegistry.Register(bash.NewTool())
+		config.ToolRegistry.Register(fileedit.NewTool())
 		config.ToolRegistry.Register(filefinder.NewTool())
+		config.ToolRegistry.Register(grep.NewTool())
+		config.ToolRegistry.Register(readfile.NewTool())
 	}
 
 	return &Client{
