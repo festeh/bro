@@ -2,13 +2,12 @@ package app
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/festeh/bro/config"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 	"github.com/festeh/bro/tools"
@@ -48,7 +47,8 @@ func NewApp() App {
 	config := &openrouter.Config{
 		// Model: "qwen/qwen3-coder",
 		// Model: "anthropic/claude-sonnet-4",
-		Model: "x-ai/grok-4",
+		// Model: "x-ai/grok-4",
+		Model: "z-ai/glm-4.5",
 	}
 
 	client, err := openrouter.NewClient(env, config)
@@ -264,16 +264,16 @@ func (a *App) handleUserCommand(input string) bool {
 	if !strings.HasPrefix(input, "/") {
 		return false
 	}
-	
+
 	cmd := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(input, "/")))
 	if cmd == "help" {
 		a.mode = "help"
 		a.input = ""
 		return true
 	}
-	
+
 	if cmd == "update-models" {
-		if err := UpdateModels(); err != nil {
+		if err := config.UpdateModels(); err != nil {
 			a.messages = append(a.messages, openrouter.NewCommandResponseMessage(fmt.Sprintf("Error updating models: %v", err)))
 		} else {
 			a.messages = append(a.messages, openrouter.NewCommandResponseMessage("Models updated successfully!"))
@@ -281,7 +281,7 @@ func (a *App) handleUserCommand(input string) bool {
 		a.input = ""
 		return true
 	}
-	
+
 	return false
 }
 
@@ -402,29 +402,4 @@ func (a App) View() string {
 		a.scrollOffset, totalLines, maxLines)
 
 	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help, debug)
-}
-
-func UpdateModels() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	modelsFile := filepath.Join(homeDir, ".bro", "models.txt")
-	
-	// Create a basic models.txt file with some default models
-	modelsContent := `anthropic/claude-sonnet-4
-x-ai/grok-4
-qwen/qwen3-coder
-openai/gpt-4o
-meta-llama/llama-3.1-405b-instruct
-google/gemini-2.0-flash-exp
-`
-
-	if err := os.WriteFile(modelsFile, []byte(modelsContent), 0644); err != nil {
-		return err
-	}
-
-	log.Info("Updated models.txt successfully")
-	return nil
 }
