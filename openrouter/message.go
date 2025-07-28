@@ -76,6 +76,24 @@ func NewSystemMessage(content string) *ChatMessage {
 	}
 }
 
+type CommandResponseMessage struct {
+	content string
+}
+
+func (m *CommandResponseMessage) IsUser() bool {
+	return false
+}
+
+func (m *CommandResponseMessage) Render() string {
+	return "System: " + m.content
+}
+
+func NewCommandResponseMessage(content string) *CommandResponseMessage {
+	return &CommandResponseMessage{
+		content: content,
+	}
+}
+
 func ChatMessagesToOpenRouter(messages []Renderable) []openrouter.ChatCompletionMessage {
 	var result []openrouter.ChatCompletionMessage
 	for _, msg := range messages {
@@ -106,6 +124,9 @@ func ChatMessagesToOpenRouter(messages []Renderable) []openrouter.ChatCompletion
 				content = m.Result
 			}
 			result = append(result, openrouter.ToolMessage(m.ToolCallID, content))
+		case *CommandResponseMessage:
+			// Command response messages are not sent to the AI - skip them
+			continue
 		}
 	}
 	return result
