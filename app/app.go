@@ -95,6 +95,28 @@ type streamDoneMsg struct{}
 type streamErrorMsg error
 type streamToolCallMsg openrouter.StreamEvent
 
+func (a App) streamCompletions() tea.Cmd {
+	return func() tea.Msg {
+		openrouterMessages := openrouter.ChatMessagesToOpenRouter(a.messages)
+		err := a.client.SendMessages(openrouterMessages, func(event openrouter.StreamEvent) {
+			switch event.Type {
+			case openrouter.StreamEventChunk:
+				a.eventChan <- streamChunkMsg(event.Content)
+			case openrouter.StreamEventDone:
+				a.eventChan <- streamDoneMsg{}
+			case openrouter.StreamEventError:
+				a.eventChan <- streamErrorMsg(event.Error)
+			case openrouter.StreamEventToolCall:
+				a.eventChan <- streamToolCallMsg(event)
+			}
+		})
+		if err != nil {
+			return streamErrorMsg(err)
+		}
+		return nil
+	}
+}
+
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -127,25 +149,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				a.input = ""
 
-				return a, func() tea.Msg {
-					openrouterMessages := openrouter.ChatMessagesToOpenRouter(a.messages)
-					err := a.client.SendMessages(openrouterMessages, func(event openrouter.StreamEvent) {
-						switch event.Type {
-						case openrouter.StreamEventChunk:
-							a.eventChan <- streamChunkMsg(event.Content)
-						case openrouter.StreamEventDone:
-							a.eventChan <- streamDoneMsg{}
-						case openrouter.StreamEventError:
-							a.eventChan <- streamErrorMsg(event.Error)
-						case openrouter.StreamEventToolCall:
-							a.eventChan <- streamToolCallMsg(event)
-						}
-					})
-					if err != nil {
-						return streamErrorMsg(err)
-					}
-					return nil
-				}
+				return a, a.streamCompletions()
 			}
 		case "backspace":
 			if len(a.input) > 0 {
@@ -181,6 +185,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		a.resetToBottom()
+		go a.streamCompletions()()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
 		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))

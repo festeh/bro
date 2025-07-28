@@ -7,11 +7,11 @@ import (
 	"io"
 
 	"github.com/charmbracelet/log"
-	"github.com/revrost/go-openrouter"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/tools"
 	"github.com/festeh/bro/tools/bash"
 	"github.com/festeh/bro/tools/filefinder"
+	"github.com/revrost/go-openrouter"
 )
 
 type StreamEvent struct {
@@ -22,9 +22,10 @@ type StreamEvent struct {
 }
 
 type ToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
-	Function ToolCallFunction       `json:"function"`
+	Index    int              `json:"index"`
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ToolCallFunction `json:"function"`
 }
 
 type ToolCallFunction struct {
@@ -125,22 +126,27 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 
 		if len(response.Choices) > 0 {
 			choice := response.Choices[0]
-			
+
 			if choice.Delta.Content != "" {
 				handler(StreamEvent{
 					Type:    StreamEventChunk,
 					Content: choice.Delta.Content,
 				})
 			}
-			
+
 			if len(choice.Delta.ToolCalls) > 0 {
 				log.Info("Received tool call delta", "count", len(choice.Delta.ToolCalls))
 				var toolCalls []ToolCall
 				for i, tc := range choice.Delta.ToolCalls {
 					log.Info("Tool call delta", "index", i, "id", tc.ID, "type", tc.Type, "function_name", tc.Function.Name, "arguments", tc.Function.Arguments)
+					index := 0
+					if tc.Index != nil {
+						index = *tc.Index
+					}
 					toolCalls = append(toolCalls, ToolCall{
-						ID:   tc.ID,
-						Type: string(tc.Type),
+						Index: index,
+						ID:    tc.ID,
+						Type:  string(tc.Type),
 						Function: ToolCallFunction{
 							Name:      tc.Function.Name,
 							Arguments: tc.Function.Arguments,
@@ -155,4 +161,3 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 		}
 	}
 }
-
