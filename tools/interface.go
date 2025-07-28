@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/revrost/go-openrouter"
 )
@@ -60,4 +61,14 @@ func (r *Registry) GetDefinitions() []openrouter.Tool {
 		definitions = append(definitions, tool.GetDefinition())
 	}
 	return definitions
+}
+
+// ExecuteTool executes a tool by name with the given arguments using the provided registry
+func ExecuteTool(registry *Registry, name string, args json.RawMessage) (interface{}, error) {
+	tool, exists := registry.Get(name)
+	if !exists {
+		return nil, fmt.Errorf("tool '%s' not found", name)
+	}
+
+	return tool.Execute(args)
 }

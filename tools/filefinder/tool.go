@@ -11,15 +11,15 @@ import (
 
 type Args struct {
 	Pattern string `json:"pattern"`
-	Type    string `json:"type,omitempty"`    // file, directory, symlink, etc.
-	Glob    bool   `json:"glob,omitempty"`     // treat pattern as glob (default: regex)
+	Type    string `json:"type,omitempty"` // file, directory, symlink, etc.
+	Glob    bool   `json:"glob,omitempty"` // treat pattern as glob (default: regex)
 }
 
 type Result struct {
-	Pattern   string   `json:"pattern"`
-	Files     []string `json:"files"`
-	Count     int      `json:"count"`
-	Error     string   `json:"error,omitempty"`
+	Pattern string   `json:"pattern"`
+	Files   []string `json:"files"`
+	Count   int      `json:"count"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // Tool represents the filefinder tool implementation
@@ -46,33 +46,33 @@ func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
 	if err := json.Unmarshal(args, &findArgs); err != nil {
 		return nil, err
 	}
-	
+
 	// Build fd command arguments
 	cmdArgs := []string{}
-	
+
 	// Add glob flag if needed
 	if findArgs.Glob {
 		cmdArgs = append(cmdArgs, "--glob")
 	}
-	
+
 	// Add pattern
 	if findArgs.Pattern != "" {
 		cmdArgs = append(cmdArgs, findArgs.Pattern)
 	}
-	
+
 	// Add type filter
 	if findArgs.Type != "" {
 		cmdArgs = append(cmdArgs, "--type", findArgs.Type)
 	}
-	
+
 	// Execute fd command
 	cmd := exec.Command("fd", cmdArgs...)
-	
+
 	stdout, err := cmd.Output()
-	
+
 	// Build assistant message response
 	var message strings.Builder
-	
+
 	if err != nil {
 		// Handle errors
 		message.WriteString(fmt.Sprintf("Error searching for pattern '%s': ", findArgs.Pattern))
@@ -83,10 +83,10 @@ func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
 		}
 		return message.String(), nil
 	}
-	
+
 	// Parse output
 	output := strings.TrimSpace(string(stdout))
-	
+
 	if output == "" {
 		// No files found
 		message.WriteString(fmt.Sprintf("No files found matching pattern '%s'", findArgs.Pattern))
@@ -97,24 +97,24 @@ func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
 		// Files found
 		files := strings.Split(output, "\n")
 		count := len(files)
-		
+
 		if count == 1 {
 			message.WriteString(fmt.Sprintf("Found 1 file matching pattern '%s':", findArgs.Pattern))
 		} else {
 			message.WriteString(fmt.Sprintf("Found %d files matching pattern '%s':", count, findArgs.Pattern))
 		}
-		
+
 		if findArgs.Type != "" {
 			message.WriteString(fmt.Sprintf(" (type: %s)", findArgs.Type))
 		}
-		
+
 		message.WriteString("\n")
 		for _, file := range files {
 			message.WriteString(fmt.Sprintf("- %s\n", file))
 		}
 	}
-	
-	return message.String(), nil
+	trimmedMessage := strings.TrimSpace(message.String())
+	return trimmedMessage, nil
 }
 
 // GetDefinition returns the OpenRouter tool definition
@@ -136,13 +136,10 @@ func (t *Tool) GetDefinition() openrouter.Tool {
 						"description": "Filter by type: file, directory, symlink, executable, empty, socket, pipe",
 						"enum":        []string{"file", "directory", "symlink", "executable", "empty", "socket", "pipe"},
 					},
-					"glob": map[string]interface{}{
-						"type":        "boolean",
-						"description": "Treat pattern as glob instead of regex (default: false)",
-					},
 				},
 				"required": []string{"pattern"},
 			},
 		},
 	}
 }
+

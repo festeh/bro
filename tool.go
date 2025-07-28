@@ -2,9 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	
-	"github.com/festeh/bro/tools"
 )
 
 type ToolCall struct {
@@ -23,13 +20,4 @@ type ToolResult struct {
 	Content    string `json:"content"`
 }
 
-// ExecuteTool executes a tool by name with the given arguments using the provided registry
-func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
-	tool, exists := registry.Get(name)
-	if !exists {
-		return nil, fmt.Errorf("tool '%s' not found", name)
-	}
-	
-	return tool.Execute(args)
-}
 

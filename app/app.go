@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -36,15 +35,6 @@ type App struct {
 	scrollOffset     int // For scrolling through message history
 }
 
-// ExecuteTool executes a tool by name with the given arguments using the provided registry
-func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
-	tool, exists := registry.Get(name)
-	if !exists {
-		return nil, fmt.Errorf("tool '%s' not found", name)
-	}
-
-	return tool.Execute(args)
-}
 
 func NewApp() App {
 	env, err := environment.NewEnvironment()
@@ -164,17 +154,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamDoneMsg:
 		// Add the AI response first
 		if a.currentResponse != "" {
-			a.messages = append(a.messages, openrouter.NewAssistantMessage(a.currentResponse))
+			trimmedResponse := strings.TrimSpace(a.currentResponse)
+			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
 		}
 
 		// Then execute any pending tool calls in order
 		for _, toolCall := range a.pendingToolCalls {
+			log.Info("Executing tool call: %v", toolCall)
 			// Add tool call message
 			toolCallMsg := &openrouter.ToolCallMessage{ToolCall: toolCall}
 			a.messages = append(a.messages, toolCallMsg)
 
 			// Execute tool and add response message
-			result, err := ExecuteTool(a.client.GetToolRegistry(), toolCall.Function.Name, []byte(toolCall.Function.Arguments))
+			result, err := tools.ExecuteTool(a.client.GetToolRegistry(), toolCall.Function.Name, []byte(toolCall.Function.Arguments))
 			toolResponseMsg := &openrouter.ToolResponseMessage{
 				ToolCallID: toolCall.ID,
 				ToolName:   toolCall.Function.Name,
@@ -184,8 +176,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.messages = append(a.messages, toolResponseMsg)
 		}
 
+		if len(a.pendingToolCalls) > 0 {
+			log.Info("Send tool call results")
+			go a.streamCompletions()()
+		} else {
+			log.Info("No tool calls to execute")
+		}
 		a.resetToBottom()
-		go a.streamCompletions()()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
 		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
@@ -193,8 +190,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
 		event := openrouter.StreamEvent(msg)
-		// Buffer tool calls to execute after the AI response is complete
-		a.pendingToolCalls = append(a.pendingToolCalls, event.ToolCalls...)
+		for _, newToolCall := range event.ToolCalls {
+			if len(a.pendingToolCalls) > 0 && a.pendingToolCalls[len(a.pendingToolCalls)-1].Index == newToolCall.Index {
+				// Concatenate to the last tool call
+				lastIndex := len(a.pendingToolCalls) - 1
+				a.pendingToolCalls[lastIndex].ID += newToolCall.ID
+				if a.pendingToolCalls[lastIndex].Type != "" {
+					a.pendingToolCalls[lastIndex].Type = newToolCall.Type
+				}
+				a.pendingToolCalls[lastIndex].Function.Name += newToolCall.Function.Name
+				a.pendingToolCalls[lastIndex].Function.Arguments += newToolCall.Function.Arguments
+			} else {
+				// Add as a new pending tool call
+				a.pendingToolCalls = append(a.pendingToolCalls, newToolCall)
+			}
+		}
 		return a, a.listenForEvents()
 	}
 	return a, nil

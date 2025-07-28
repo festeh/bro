@@ -33,7 +33,7 @@ func (m *ToolCallMessage) IsUser() bool {
 }
 
 func (m *ToolCallMessage) Render() string {
-	return fmt.Sprintf("🔧 Executing %s: %s", m.ToolCall.Function.Name, m.ToolCall.Function.Arguments)
+	return fmt.Sprintf("  🔧 Executing %s: %s", m.ToolCall.Function.Name, m.ToolCall.Function.Arguments)
 }
 
 type ToolResponseMessage struct {
@@ -49,7 +49,7 @@ func (m *ToolResponseMessage) IsUser() bool {
 
 func (m *ToolResponseMessage) Render() string {
 	if m.Error != nil {
-		return fmt.Sprintf("❌ Tool execution error: %s", m.Error.Error())
+		return fmt.Sprintf("  ❌ Tool execution error: %s", m.Error.Error())
 	}
 	
 	if message, ok := m.Result.(string); ok {
