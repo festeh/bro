@@ -33,8 +33,8 @@ type App struct {
 	client           *openrouter.Client
 	eventChan        chan tea.Msg
 	scrollOffset     int // For scrolling through message history
+	mode             string
 }
-
 
 func NewApp() App {
 	env, err := environment.NewEnvironment()
@@ -44,7 +44,9 @@ func NewApp() App {
 	}
 
 	config := &openrouter.Config{
-		Model: "qwen/qwen3-coder",
+		// Model: "qwen/qwen3-coder",
+		// Model: "anthropic/claude-sonnet-4",
+		Model: "x-ai/grok-4",
 	}
 
 	client, err := openrouter.NewClient(env, config)
@@ -63,6 +65,7 @@ func NewApp() App {
 		input:     "",
 		client:    client,
 		eventChan: make(chan tea.Msg, EVENT_CHAN_BUFFER),
+		mode:      "chat",
 	}
 }
 
@@ -113,6 +116,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 	case tea.KeyMsg:
+		if a.mode == "help" {
+			if msg.String() == "q" {
+				a.mode = "chat"
+				return a, nil
+			}
+			return a, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
@@ -131,6 +141,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
+				trimmed := strings.TrimSpace(a.input)
+				if a.handleUserCommand(trimmed) {
+					return a, nil
+				}
 				userMsg := openrouter.NewUserMessage(a.input)
 				a.messages = append(a.messages, userMsg)
 				a.currentResponse = ""
@@ -244,6 +258,21 @@ func (a App) calculateTotalLines() int {
 	return totalLines
 }
 
+func (a *App) handleUserCommand(input string) bool {
+	if !strings.HasPrefix(input, "/") {
+		return false
+	}
+	
+	cmd := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(input, "/")))
+	if cmd == "help" {
+		a.mode = "help"
+		a.input = ""
+		return true
+	}
+	
+	return false
+}
+
 func (a *App) resetToBottom() {
 	a.currentResponse = ""
 	a.pendingToolCalls = nil
@@ -259,6 +288,10 @@ func (a App) getChatDimensions() (chatHeight, chatWidth, maxLines int) {
 }
 
 func (a App) View() string {
+	if a.mode == "help" {
+		helpStyle := lipgloss.NewStyle().Width(a.width).Height(a.height).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Align(lipgloss.Center).Padding(2)
+		return helpStyle.Render("Bro Help\n\nThis is a basic help screen.\nPress 'q' to return to the chat.")
+	}
 	if a.width == 0 || a.height == 0 {
 		return "Loading..."
 	}
