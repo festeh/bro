@@ -39,7 +39,7 @@ func (m *ToolCallMessage) Render() string {
 type ToolResponseMessage struct {
 	ToolCallID string
 	ToolName   string
-	Result     interface{}
+	Result     string
 	Error      error
 }
 
@@ -51,12 +51,8 @@ func (m *ToolResponseMessage) Render() string {
 	if m.Error != nil {
 		return fmt.Sprintf("  ❌ Tool execution error: %s", m.Error.Error())
 	}
-	
-	if message, ok := m.Result.(string); ok {
-		return message
-	}
-	
-	return fmt.Sprintf("Result: %+v", m.Result)
+
+	return "  " + m.Result
 }
 
 func NewUserMessage(content string) *ChatMessage {
@@ -106,10 +102,8 @@ func ChatMessagesToOpenRouter(messages []Renderable) []openrouter.ChatCompletion
 			var content string
 			if m.Error != nil {
 				content = fmt.Sprintf("Error: %s", m.Error.Error())
-			} else if message, ok := m.Result.(string); ok {
-				content = message
 			} else {
-				content = fmt.Sprintf("%+v", m.Result)
+				content = m.Result
 			}
 			result = append(result, openrouter.ToolMessage(m.ToolCallID, content))
 		}
