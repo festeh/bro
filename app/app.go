@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/log"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/log"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 	"github.com/festeh/bro/tools"
@@ -35,7 +35,6 @@ type App struct {
 	eventChan        chan tea.Msg
 	scrollOffset     int // For scrolling through message history
 }
-
 
 // ExecuteTool executes a tool by name with the given arguments using the provided registry
 func ExecuteTool(registry *tools.Registry, name string, args json.RawMessage) (interface{}, error) {
@@ -81,12 +80,8 @@ func (a *App) SetMessages(messages []openrouter.Renderable) {
 	a.messages = messages
 }
 
-
 func (a App) Init() tea.Cmd {
-	return tea.Batch(
-		func() tea.Msg { return nil },
-		a.listenForEvents(),
-	)
+	return a.listenForEvents()
 }
 
 func (a App) listenForEvents() tea.Cmd {
@@ -167,7 +162,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.currentResponse != "" {
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(a.currentResponse))
 		}
-		
+
 		// Then execute any pending tool calls in order
 		for _, toolCall := range a.pendingToolCalls {
 			// Add tool call message
@@ -184,7 +179,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.messages = append(a.messages, toolResponseMsg)
 		}
-		
+
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
