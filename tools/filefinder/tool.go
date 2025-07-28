@@ -41,10 +41,10 @@ func (t *Tool) Description() string {
 }
 
 // Execute runs the fd command with the given arguments
-func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
+func (t *Tool) Execute(args json.RawMessage) (string, error) {
 	var findArgs Args
 	if err := json.Unmarshal(args, &findArgs); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Build fd command arguments

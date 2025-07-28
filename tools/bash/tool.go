@@ -40,10 +40,10 @@ func (t *Tool) Description() string {
 }
 
 // Execute runs the bash command with the given arguments
-func (t *Tool) Execute(args json.RawMessage) (interface{}, error) {
+func (t *Tool) Execute(args json.RawMessage) (string, error) {
 	var bashArgs Args
 	if err := json.Unmarshal(args, &bashArgs); err != nil {
-		return nil, err
+		return "", err
 	}
 	
 	cmd := exec.Command("bash", "-c", bashArgs.Command)

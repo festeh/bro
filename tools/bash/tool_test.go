@@ -64,7 +64,8 @@ func TestBashToolWithAI(t *testing.T) {
 				if err != nil {
 					model.error = err.Error()
 					model.hasError = true
-				} else if message, ok := result.(string); ok {
+				} else {
+					message := result
 					model.bashOutput = message
 					t.Logf("Bash tool executed")
 					t.Logf("Bash message: %s", message)

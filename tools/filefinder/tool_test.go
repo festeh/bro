@@ -57,7 +57,8 @@ func TestFileFinderToolWithAI(t *testing.T) {
 				if err != nil {
 					model.error = err.Error()
 					model.hasError = true
-				} else if message, ok := result.(string); ok {
+				} else {
+					message := result
 					// Parse files from the message for verification
 					if strings.Contains(message, "- ") {
 						lines := strings.Split(message, "\n")
@@ -190,10 +191,7 @@ func TestFileFinderBasic(t *testing.T) {
 		t.Fatalf("Tool execution failed: %v", err)
 	}
 	
-	message, ok := result.(string)
-	if !ok {
-		t.Fatalf("Expected string result, got %T", result)
-	}
+	message := result
 	
 	t.Logf("FileFinder result: %s", message)
 	

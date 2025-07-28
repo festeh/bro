@@ -16,7 +16,7 @@ type Tool interface {
 	Description() string
 	
 	// Execute runs the tool with the given arguments and returns the result
-	Execute(args json.RawMessage) (interface{}, error)
+	Execute(args json.RawMessage) (string, error)
 	
 	// GetDefinition returns the OpenRouter tool definition for this tool
 	GetDefinition() openrouter.Tool
@@ -64,10 +64,10 @@ func (r *Registry) GetDefinitions() []openrouter.Tool {
 }
 
 // ExecuteTool executes a tool by name with the given arguments using the provided registry
-func ExecuteTool(registry *Registry, name string, args json.RawMessage) (interface{}, error) {
+func ExecuteTool(registry *Registry, name string, args json.RawMessage) (string, error) {
 	tool, exists := registry.Get(name)
 	if !exists {
-		return nil, fmt.Errorf("tool '%s' not found", name)
+		return "", fmt.Errorf("tool '%s' not found", name)
 	}
 
 	return tool.Execute(args)
