@@ -89,6 +89,16 @@ func (c *Client) GetToolRegistry() *tools.Registry {
 	return c.config.ToolRegistry
 }
 
+// SetModel updates the model for this client
+func (c *Client) SetModel(model string) {
+	c.config.Model = model
+}
+
+// GetModel returns the current model
+func (c *Client) GetModel() string {
+	return c.config.Model
+}
+
 func (c *Client) SendMessages(messages []openrouter.ChatCompletionMessage, handler StreamHandler) error {
 
 	// Get tools from the client's registry

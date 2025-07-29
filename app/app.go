@@ -282,6 +282,19 @@ func (a *App) handleUserCommand(input string) bool {
 		return true
 	}
 
+	if strings.HasPrefix(cmd, "model ") {
+		modelName := strings.TrimSpace(strings.TrimPrefix(cmd, "model "))
+		if modelName == "" {
+			currentModel := a.client.GetModel()
+			a.messages = append(a.messages, openrouter.NewCommandResponseMessage(fmt.Sprintf("Current model: %s", currentModel)))
+		} else {
+			a.client.SetModel(modelName)
+			a.messages = append(a.messages, openrouter.NewCommandResponseMessage(fmt.Sprintf("Model set to: %s", modelName)))
+		}
+		a.input = ""
+		return true
+	}
+
 	return false
 }
 
