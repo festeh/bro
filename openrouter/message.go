@@ -2,7 +2,12 @@ package openrouter
 
 import (
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/revrost/go-openrouter"
+)
+
+var (
+	redStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 )
 
 type Renderable interface {
@@ -85,12 +90,30 @@ func (m *CommandResponseMessage) IsUser() bool {
 }
 
 func (m *CommandResponseMessage) Render() string {
-	return "System: " + m.content
+	return m.content
 }
 
 func NewCommandResponseMessage(content string) *CommandResponseMessage {
 	return &CommandResponseMessage{
 		content: content,
+	}
+}
+
+type CommandErrorResponseMessage struct {
+	content string
+}
+
+func (m *CommandErrorResponseMessage) IsUser() bool {
+	return false
+}
+
+func (m *CommandErrorResponseMessage) Render() string {
+	return m.content
+}
+
+func NewCommandErrorResponseMessage(content string) *CommandResponseMessage {
+	return &CommandResponseMessage{
+		content: redStyle.Render(content),
 	}
 }
 
