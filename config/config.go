@@ -13,6 +13,7 @@ import (
 type Config struct {
 	AvailableModels []string
 	History         *History
+	Session         *Session
 }
 
 func InitializeBroDirectory() (*Config, error) {
@@ -50,6 +51,13 @@ func InitializeBroDirectory() (*Config, error) {
 		return nil, err
 	}
 	config.History = history
+
+	// Initialize session
+	session, err := NewSession()
+	if err != nil {
+		return nil, err
+	}
+	config.Session = session
 
 	return config, nil
 }

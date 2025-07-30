@@ -23,14 +23,22 @@ func main() {
 	log.Info("Application starting")
 
 	// Initialize ~/.bro directory and models.txt
-	if _, err := config.InitializeBroDirectory(); err != nil {
+	appConfig, err := config.InitializeBroDirectory()
+	if err != nil {
 		log.Error("Failed to initialize ~/.bro directory", "error", err)
 	}
 
-	p := tea.NewProgram(app.NewApp())
+	p := tea.NewProgram(app.NewAppWithConfig(appConfig))
 
 	if _, err := p.Run(); err != nil {
 		log.Error("Failed to run program", "error", err)
+	}
+
+	// Close session file properly
+	if appConfig != nil && appConfig.Session != nil {
+		if err := appConfig.Session.Close(); err != nil {
+			log.Error("Failed to close session file", "error", err)
+		}
 	}
 
 	log.Info("Application exiting")

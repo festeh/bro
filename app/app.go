@@ -41,15 +41,18 @@ type App struct {
 }
 
 func NewApp() App {
-	env, err := environment.NewEnvironment()
-	if err != nil {
-		log.Error("Failed to initialize environment", "error", err)
-		return App{}
-	}
-
 	appConfig, err := config.InitializeBroDirectory()
 	if err != nil {
 		log.Error("Failed to initialize bro directory", "error", err)
+		return App{}
+	}
+	return NewAppWithConfig(appConfig)
+}
+
+func NewAppWithConfig(appConfig *config.Config) App {
+	env, err := environment.NewEnvironment()
+	if err != nil {
+		log.Error("Failed to initialize environment", "error", err)
 		return App{}
 	}
 
@@ -192,6 +195,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				
+				// Log user input to session
+				if a.config != nil && a.config.Session != nil {
+					if err := a.config.Session.LogUserInput(trimmed); err != nil {
+						log.Error("Failed to log user input to session", "error", err)
+					}
+				}
+				
 				// Reset history navigation
 				a.historyIndex = -1
 				a.originalInput = ""
@@ -230,6 +240,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.currentResponse != "" {
 			trimmedResponse := strings.TrimSpace(a.currentResponse)
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
+			
+			// Log AI response to session
+			if a.config != nil && a.config.Session != nil {
+				if err := a.config.Session.LogAIResponse(trimmedResponse); err != nil {
+					log.Error("Failed to log AI response to session", "error", err)
+				}
+			}
 		}
 
 		// Then execute any pending tool calls in order
@@ -248,6 +265,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Error:      err,
 			}
 			a.messages = append(a.messages, toolResponseMsg)
+			
+			// Log tool call to session
+			if a.config != nil && a.config.Session != nil {
+				if err := a.config.Session.LogToolCall(toolCall.Function.Name, toolCall.Function.Arguments, result); err != nil {
+					log.Error("Failed to log tool call to session", "error", err)
+				}
+			}
 		}
 
 		if len(a.pendingToolCalls) > 0 {
