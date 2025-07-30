@@ -156,34 +156,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.scrollOffset--
 			}
 		case "up":
-			if a.config != nil && a.config.History != nil {
-				commands := a.config.History.GetCommands()
-				if len(commands) > 0 {
-					if a.historyIndex == -1 {
-						// Starting history navigation, save current input
-						a.originalInput = a.input
-						a.historyIndex = len(commands) - 1
-					} else if a.historyIndex > 0 {
-						a.historyIndex--
-					}
-					if a.historyIndex >= 0 && a.historyIndex < len(commands) {
-						a.input = commands[a.historyIndex]
-					}
-				}
-			}
+			a.navigateHistoryUp()
 		case "down":
-			if a.historyIndex != -1 && a.config != nil && a.config.History != nil {
-				commands := a.config.History.GetCommands()
-				if a.historyIndex < len(commands)-1 {
-					a.historyIndex++
-					a.input = commands[a.historyIndex]
-				} else {
-					// Reached end of history, restore original input
-					a.historyIndex = -1
-					a.input = a.originalInput
-					a.originalInput = ""
-				}
-			}
+			a.navigateHistoryDown()
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
 				trimmed := strings.TrimSpace(a.input)
@@ -347,6 +322,46 @@ func (a *App) resetToBottom() {
 	a.pendingToolCalls = nil
 	a.isWaiting = false
 	a.scrollOffset = 0
+}
+
+func (a *App) navigateHistoryUp() {
+	if a.config == nil || a.config.History == nil {
+		return
+	}
+	
+	commands := a.config.History.GetCommands()
+	if len(commands) == 0 {
+		return
+	}
+	
+	if a.historyIndex == -1 {
+		// Starting history navigation, save current input
+		a.originalInput = a.input
+		a.historyIndex = len(commands) - 1
+	} else if a.historyIndex > 0 {
+		a.historyIndex--
+	}
+	
+	if a.historyIndex >= 0 && a.historyIndex < len(commands) {
+		a.input = commands[a.historyIndex]
+	}
+}
+
+func (a *App) navigateHistoryDown() {
+	if a.historyIndex == -1 || a.config == nil || a.config.History == nil {
+		return
+	}
+	
+	commands := a.config.History.GetCommands()
+	if a.historyIndex < len(commands)-1 {
+		a.historyIndex++
+		a.input = commands[a.historyIndex]
+	} else {
+		// Reached end of history, restore original input
+		a.historyIndex = -1
+		a.input = a.originalInput
+		a.originalInput = ""
+	}
 }
 
 func (a App) getChatDimensions() (chatHeight, chatWidth, maxLines int) {
