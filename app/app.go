@@ -36,6 +36,8 @@ type App struct {
 	scrollOffset     int // For scrolling through message history
 	mode             string
 	config           *config.Config
+	historyIndex     int    // Current position in command history (-1 means not navigating)
+	originalInput    string // Store original input when navigating history
 }
 
 func NewApp() App {
@@ -70,12 +72,13 @@ func NewApp() App {
 	}
 
 	return App{
-		messages:  initialMessages,
-		input:     "",
-		client:    client,
-		eventChan: make(chan tea.Msg, EVENT_CHAN_BUFFER),
-		mode:      "chat",
-		config:    appConfig,
+		messages:     initialMessages,
+		input:        "",
+		client:       client,
+		eventChan:    make(chan tea.Msg, EVENT_CHAN_BUFFER),
+		mode:         "chat",
+		config:       appConfig,
+		historyIndex: -1,
 	}
 }
 
@@ -136,7 +139,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
-		case "up":
+		case "ctrl+k":
 			_, _, maxLines := a.getChatDimensions()
 			totalLines := a.calculateTotalLines()
 			if totalLines > maxLines {
@@ -145,9 +148,38 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.scrollOffset++
 				}
 			}
-		case "down":
+		case "ctrl+j":
 			if a.scrollOffset > 0 {
 				a.scrollOffset--
+			}
+		case "up":
+			if a.config != nil && a.config.History != nil {
+				commands := a.config.History.GetCommands()
+				if len(commands) > 0 {
+					if a.historyIndex == -1 {
+						// Starting history navigation, save current input
+						a.originalInput = a.input
+						a.historyIndex = len(commands) - 1
+					} else if a.historyIndex > 0 {
+						a.historyIndex--
+					}
+					if a.historyIndex >= 0 && a.historyIndex < len(commands) {
+						a.input = commands[a.historyIndex]
+					}
+				}
+			}
+		case "down":
+			if a.historyIndex != -1 && a.config != nil && a.config.History != nil {
+				commands := a.config.History.GetCommands()
+				if a.historyIndex < len(commands)-1 {
+					a.historyIndex++
+					a.input = commands[a.historyIndex]
+				} else {
+					// Reached end of history, restore original input
+					a.historyIndex = -1
+					a.input = a.originalInput
+					a.originalInput = ""
+				}
 			}
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
@@ -159,6 +191,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						log.Error("Failed to add command to history", "error", err)
 					}
 				}
+				
+				// Reset history navigation
+				a.historyIndex = -1
+				a.originalInput = ""
 				
 				if a.handleUserCommand(trimmed) {
 					return a, nil
@@ -177,8 +213,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(a.input) > 0 {
 				a.input = a.input[:len(a.input)-1]
 			}
+			// Reset history navigation when typing
+			a.historyIndex = -1
+			a.originalInput = ""
 		default:
 			a.input += msg.String()
+			// Reset history navigation when typing
+			a.historyIndex = -1
+			a.originalInput = ""
 		}
 	case streamChunkMsg:
 		a.currentResponse += string(msg)
