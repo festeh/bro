@@ -12,6 +12,7 @@ import (
 
 type Config struct {
 	AvailableModels []string
+	History         *History
 }
 
 func InitializeBroDirectory() (*Config, error) {
@@ -42,6 +43,14 @@ func InitializeBroDirectory() (*Config, error) {
 	if err := loadAvailableModels(config); err != nil {
 		return nil, err
 	}
+
+	// Initialize history
+	history, err := NewHistory()
+	if err != nil {
+		return nil, err
+	}
+	config.History = history
+
 	return config, nil
 }
 

@@ -152,6 +152,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
 				trimmed := strings.TrimSpace(a.input)
+				
+				// Add command to history
+				if a.config != nil && a.config.History != nil {
+					if err := a.config.History.AddCommand(trimmed); err != nil {
+						log.Error("Failed to add command to history", "error", err)
+					}
+				}
+				
 				if a.handleUserCommand(trimmed) {
 					return a, nil
 				}
