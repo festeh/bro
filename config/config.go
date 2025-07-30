@@ -12,8 +12,8 @@ import (
 
 type Config struct {
 	AvailableModels []string
-	History         *History
-	Session         *Session
+	History         History
+	Session         Session
 }
 
 func InitializeBroDirectory() (*Config, error) {
@@ -48,16 +48,30 @@ func InitializeBroDirectory() (*Config, error) {
 	// Initialize history
 	history, err := NewHistory()
 	if err != nil {
-		return nil, err
+		log.Error("Failed to initialize history", "error", err)
+		// Create empty history as fallback
+		config.History = History{
+			commands: make([]string, HISTORY_SIZE),
+			head:     0,
+			size:     0,
+			dirPath:  filepath.Join(homeDir, ".bro"),
+		}
+	} else {
+		config.History = *history
 	}
-	config.History = history
 
 	// Initialize session
 	session, err := NewSession()
 	if err != nil {
-		return nil, err
+		log.Error("Failed to initialize session", "error", err)
+		// Create empty session as fallback
+		config.Session = Session{
+			dirPath:     filepath.Join(homeDir, ".bro"),
+			sessionFile: nil,
+		}
+	} else {
+		config.Session = *session
 	}
-	config.Session = session
 
 	return config, nil
 }

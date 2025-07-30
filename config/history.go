@@ -2,10 +2,13 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/log"
 )
 
 const (
@@ -87,6 +90,11 @@ func (h *History) GetCommands() []string {
 }
 
 func (h *History) save() error {
+	if h.dirPath == "" {
+		log.Error("Cannot save history: directory path not initialized")
+		return fmt.Errorf("directory path is not initialized")
+	}
+
 	historyPath := filepath.Join(h.dirPath, HISTORY_FILE)
 	indexPath := filepath.Join(h.dirPath, INDEX_FILE)
 

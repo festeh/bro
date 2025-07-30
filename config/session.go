@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 type SessionEntry struct {
@@ -86,6 +88,7 @@ func (s *Session) LogToolCall(toolName string, params interface{}, result interf
 
 func (s *Session) writeEntry(entry SessionEntry) error {
 	if s.sessionFile == nil {
+		log.Error("Cannot write session entry: session file not initialized")
 		return fmt.Errorf("session file is not initialized")
 	}
 

@@ -165,17 +165,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				trimmed := strings.TrimSpace(a.input)
 				
 				// Add command to history
-				if a.config.History != nil {
-					if err := a.config.History.AddCommand(trimmed); err != nil {
-						log.Error("Failed to add command to history", "error", err)
-					}
+				if err := a.config.History.AddCommand(trimmed); err != nil {
+					log.Error("Failed to add command to history", "error", err)
 				}
 				
 				// Log user input to session
-				if a.config.Session != nil {
-					if err := a.config.Session.LogUserInput(trimmed); err != nil {
-						log.Error("Failed to log user input to session", "error", err)
-					}
+				if err := a.config.Session.LogUserInput(trimmed); err != nil {
+					log.Error("Failed to log user input to session", "error", err)
 				}
 				
 				// Reset history navigation
@@ -218,10 +214,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
 			
 			// Log AI response to session
-			if a.config.Session != nil {
-				if err := a.config.Session.LogAIResponse(trimmedResponse); err != nil {
-					log.Error("Failed to log AI response to session", "error", err)
-				}
+			if err := a.config.Session.LogAIResponse(trimmedResponse); err != nil {
+				log.Error("Failed to log AI response to session", "error", err)
 			}
 		}
 
@@ -243,10 +237,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.messages = append(a.messages, toolResponseMsg)
 			
 			// Log tool call to session
-			if a.config.Session != nil {
-				if err := a.config.Session.LogToolCall(toolCall.Function.Name, toolCall.Function.Arguments, result); err != nil {
-					log.Error("Failed to log tool call to session", "error", err)
-				}
+			if err := a.config.Session.LogToolCall(toolCall.Function.Name, toolCall.Function.Arguments, result); err != nil {
+				log.Error("Failed to log tool call to session", "error", err)
 			}
 		}
 
@@ -326,9 +318,6 @@ func (a *App) resetToBottom() {
 }
 
 func (a *App) navigateHistoryUp() {
-	if a.config.History == nil {
-		return
-	}
 	
 	commands := a.config.History.GetCommands()
 	if len(commands) == 0 {
@@ -349,7 +338,7 @@ func (a *App) navigateHistoryUp() {
 }
 
 func (a *App) navigateHistoryDown() {
-	if a.historyIndex == -1 || a.config.History == nil {
+	if a.historyIndex == -1 {
 		return
 	}
 	

@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// Close session file properly
-	if appConfig != nil && appConfig.Session != nil {
+	if appConfig != nil {
 		if err := appConfig.Session.Close(); err != nil {
 			log.Error("Failed to close session file", "error", err)
 		}
