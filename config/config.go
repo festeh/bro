@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"slices"
 )
 
 type Config struct {
@@ -20,14 +21,14 @@ func InitializeBroDirectory() (*Config, error) {
 	}
 
 	broDir := filepath.Join(homeDir, ".bro")
-	
+
 	// Create ~/.bro directory if it doesn't exist
 	if err := os.MkdirAll(broDir, 0755); err != nil {
 		return nil, err
 	}
 
 	modelsFile := filepath.Join(broDir, "models.txt")
-	
+
 	// Check if models.txt exists, if not create it by calling UpdateModels
 	if _, err := os.Stat(modelsFile); os.IsNotExist(err) {
 		log.Info("models.txt not found, creating it...")
@@ -51,7 +52,7 @@ func UpdateModels() error {
 	}
 
 	modelsFile := filepath.Join(homeDir, ".bro", "models.txt")
-	
+
 	// Create a basic models.txt file with some default models
 	modelsContent := `anthropic/claude-sonnet-4
 x-ai/grok-4
@@ -78,14 +79,14 @@ func loadAvailableModels(config *Config) error {
 	if err != nil {
 		return err
 	}
-	
+
 	modelsFile := filepath.Join(homeDir, ".bro", "models.txt")
 	file, err := os.Open(modelsFile)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	
+
 	var models []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -94,11 +95,11 @@ func loadAvailableModels(config *Config) error {
 			models = append(models, line)
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	
+
 	config.AvailableModels = models
 	return nil
 }
@@ -107,10 +108,6 @@ func (c *Config) IsValidModel(modelName string) bool {
 	if c == nil {
 		return false
 	}
-	for _, model := range c.AvailableModels {
-		if model == modelName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.AvailableModels, modelName)
 }
+
