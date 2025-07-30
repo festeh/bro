@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,7 +36,7 @@ type App struct {
 	eventChan        chan tea.Msg
 	scrollOffset     int // For scrolling through message history
 	mode             string
-	config           *config.Config
+	config           config.Config
 	historyIndex     int    // Current position in command history (-1 means not navigating)
 	originalInput    string // Store original input when navigating history
 }
@@ -44,12 +45,12 @@ func NewApp() App {
 	appConfig, err := config.InitializeBroDirectory()
 	if err != nil {
 		log.Error("Failed to initialize bro directory", "error", err)
-		return App{}
+		os.Exit(1)
 	}
-	return NewAppWithConfig(appConfig)
+	return NewAppWithConfig(*appConfig)
 }
 
-func NewAppWithConfig(appConfig *config.Config) App {
+func NewAppWithConfig(appConfig config.Config) App {
 	env, err := environment.NewEnvironment()
 	if err != nil {
 		log.Error("Failed to initialize environment", "error", err)
@@ -164,14 +165,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				trimmed := strings.TrimSpace(a.input)
 				
 				// Add command to history
-				if a.config != nil && a.config.History != nil {
+				if a.config.History != nil {
 					if err := a.config.History.AddCommand(trimmed); err != nil {
 						log.Error("Failed to add command to history", "error", err)
 					}
 				}
 				
 				// Log user input to session
-				if a.config != nil && a.config.Session != nil {
+				if a.config.Session != nil {
 					if err := a.config.Session.LogUserInput(trimmed); err != nil {
 						log.Error("Failed to log user input to session", "error", err)
 					}
@@ -217,7 +218,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
 			
 			// Log AI response to session
-			if a.config != nil && a.config.Session != nil {
+			if a.config.Session != nil {
 				if err := a.config.Session.LogAIResponse(trimmedResponse); err != nil {
 					log.Error("Failed to log AI response to session", "error", err)
 				}
@@ -242,7 +243,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.messages = append(a.messages, toolResponseMsg)
 			
 			// Log tool call to session
-			if a.config != nil && a.config.Session != nil {
+			if a.config.Session != nil {
 				if err := a.config.Session.LogToolCall(toolCall.Function.Name, toolCall.Function.Arguments, result); err != nil {
 					log.Error("Failed to log tool call to session", "error", err)
 				}
@@ -325,7 +326,7 @@ func (a *App) resetToBottom() {
 }
 
 func (a *App) navigateHistoryUp() {
-	if a.config == nil || a.config.History == nil {
+	if a.config.History == nil {
 		return
 	}
 	
@@ -348,7 +349,7 @@ func (a *App) navigateHistoryUp() {
 }
 
 func (a *App) navigateHistoryDown() {
-	if a.historyIndex == -1 || a.config == nil || a.config.History == nil {
+	if a.historyIndex == -1 || a.config.History == nil {
 		return
 	}
 	

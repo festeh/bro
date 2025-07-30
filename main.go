@@ -28,7 +28,7 @@ func main() {
 		log.Error("Failed to initialize ~/.bro directory", "error", err)
 	}
 
-	p := tea.NewProgram(app.NewAppWithConfig(appConfig))
+	p := tea.NewProgram(app.NewAppWithConfig(*appConfig))
 
 	if _, err := p.Run(); err != nil {
 		log.Error("Failed to run program", "error", err)

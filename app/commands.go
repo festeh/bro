@@ -41,7 +41,7 @@ func (a *App) handleUserCommand(input string) bool {
 			currentModel := a.client.GetModel()
 			a.messages = append(a.messages, openrouter.NewCommandResponseMessage(fmt.Sprintf("Current model: %s", currentModel)))
 		} else {
-			if a.config == nil || len(a.config.AvailableModels) == 0 {
+			if len(a.config.AvailableModels) == 0 {
 				a.messages = append(a.messages, openrouter.NewCommandErrorResponseMessage("Error: Available models not loaded"))
 			} else if !a.config.IsValidModel(modelName) {
 				a.messages = append(a.messages, openrouter.NewCommandErrorResponseMessage(fmt.Sprintf("Model '%s' is not available. Available models:\n%s", modelName, strings.Join(a.config.AvailableModels, "\n"))))
