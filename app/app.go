@@ -213,9 +213,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			trimmedResponse := strings.TrimSpace(a.currentResponse)
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
 			
-			// Log AI response to session
-			if err := a.config.Session.LogAIResponse(trimmedResponse); err != nil {
-				log.Error("Failed to log AI response to session", "error", err)
+			// Log AI response with tool calls to session
+			toolCallsForLogging := make([]interface{}, len(a.pendingToolCalls))
+			for i, toolCall := range a.pendingToolCalls {
+				toolCallsForLogging[i] = map[string]interface{}{
+					"id":        toolCall.ID,
+					"type":      toolCall.Type,
+					"function":  toolCall.Function.Name,
+					"arguments": toolCall.Function.Arguments,
+				}
+			}
+			if err := a.config.Session.LogAIResponseWithToolCalls(trimmedResponse, toolCallsForLogging); err != nil {
+				log.Error("Failed to log AI response with tool calls to session", "error", err)
 			}
 		}
 

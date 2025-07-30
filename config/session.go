@@ -71,6 +71,20 @@ func (s *Session) LogAIResponse(response string) error {
 	return s.writeEntry(entry)
 }
 
+func (s *Session) LogAIResponseWithToolCalls(response string, toolCalls []interface{}) error {
+	content := map[string]interface{}{
+		"response":   response,
+		"tool_calls": toolCalls,
+	}
+	
+	entry := SessionEntry{
+		Timestamp: time.Now(),
+		Type:      "ai_response",
+		Content:   content,
+	}
+	return s.writeEntry(entry)
+}
+
 func (s *Session) LogToolCall(toolName string, params interface{}, result interface{}) error {
 	toolCall := map[string]interface{}{
 		"tool_name":  toolName,
@@ -85,6 +99,7 @@ func (s *Session) LogToolCall(toolName string, params interface{}, result interf
 	}
 	return s.writeEntry(entry)
 }
+
 
 func (s *Session) writeEntry(entry SessionEntry) error {
 	if s.sessionFile == nil {
