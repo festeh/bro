@@ -1,23 +1,29 @@
 package config
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/log"
 )
 
-func InitializeBroDirectory() error {
+type Config struct {
+	AvailableModels []string
+}
+
+func InitializeBroDirectory() (*Config, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	broDir := filepath.Join(homeDir, ".bro")
 	
 	// Create ~/.bro directory if it doesn't exist
 	if err := os.MkdirAll(broDir, 0755); err != nil {
-		return err
+		return nil, err
 	}
 
 	modelsFile := filepath.Join(broDir, "models.txt")
@@ -25,10 +31,17 @@ func InitializeBroDirectory() error {
 	// Check if models.txt exists, if not create it by calling UpdateModels
 	if _, err := os.Stat(modelsFile); os.IsNotExist(err) {
 		log.Info("models.txt not found, creating it...")
-		return UpdateModels()
+		if err := UpdateModels(); err != nil {
+			return nil, err
+		}
 	}
 
-	return nil
+	// Initialize config and load available models
+	config := &Config{}
+	if err := loadAvailableModels(config); err != nil {
+		return nil, err
+	}
+	return config, nil
 }
 
 func UpdateModels() error {
@@ -54,4 +67,50 @@ google/gemini-2.0-flash-exp
 
 	log.Info("Updated models.txt successfully")
 	return nil
+}
+
+func (c *Config) UpdateAvailableModels() error {
+	return loadAvailableModels(c)
+}
+
+func loadAvailableModels(config *Config) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	
+	modelsFile := filepath.Join(homeDir, ".bro", "models.txt")
+	file, err := os.Open(modelsFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	
+	var models []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			models = append(models, line)
+		}
+	}
+	
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	
+	config.AvailableModels = models
+	return nil
+}
+
+func (c *Config) IsValidModel(modelName string) bool {
+	if c == nil {
+		return false
+	}
+	for _, model := range c.AvailableModels {
+		if model == modelName {
+			return true
+		}
+	}
+	return false
 }

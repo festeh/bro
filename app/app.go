@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
+	"github.com/festeh/bro/config"
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 	"github.com/festeh/bro/tools"
@@ -34,6 +35,7 @@ type App struct {
 	eventChan        chan tea.Msg
 	scrollOffset     int // For scrolling through message history
 	mode             string
+	config           *config.Config
 }
 
 func NewApp() App {
@@ -43,14 +45,20 @@ func NewApp() App {
 		return App{}
 	}
 
-	config := &openrouter.Config{
+	appConfig, err := config.InitializeBroDirectory()
+	if err != nil {
+		log.Error("Failed to initialize bro directory", "error", err)
+		return App{}
+	}
+
+	openrouterConfig := &openrouter.Config{
 		// Model: "qwen/qwen3-coder",
 		// Model: "anthropic/claude-sonnet-4",
 		// Model: "x-ai/grok-4",
 		Model: "z-ai/glm-4.5",
 	}
 
-	client, err := openrouter.NewClient(env, config)
+	client, err := openrouter.NewClient(env, openrouterConfig)
 	if err != nil {
 		log.Error("Failed to initialize OpenRouter client", "error", err)
 		return App{}
@@ -67,6 +75,7 @@ func NewApp() App {
 		client:    client,
 		eventChan: make(chan tea.Msg, EVENT_CHAN_BUFFER),
 		mode:      "chat",
+		config:    appConfig,
 	}
 }
 

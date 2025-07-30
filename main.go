@@ -23,7 +23,7 @@ func main() {
 	log.Info("Application starting")
 
 	// Initialize ~/.bro directory and models.txt
-	if err := config.InitializeBroDirectory(); err != nil {
+	if _, err := config.InitializeBroDirectory(); err != nil {
 		log.Error("Failed to initialize ~/.bro directory", "error", err)
 	}
 
