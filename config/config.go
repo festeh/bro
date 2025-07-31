@@ -14,6 +14,7 @@ type Config struct {
 	AvailableModels []string
 	History         History
 	Session         Session
+	Stats           *Stats
 }
 
 func InitializeBroDirectory() (*Config, error) {
@@ -71,6 +72,15 @@ func InitializeBroDirectory() (*Config, error) {
 		}
 	} else {
 		config.Session = *session
+	}
+
+	// Initialize stats
+	stats, err := NewStats()
+	if err != nil {
+		log.Error("Failed to initialize stats", "error", err)
+		config.Stats = nil
+	} else {
+		config.Stats = stats
 	}
 
 	return config, nil

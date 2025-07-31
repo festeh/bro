@@ -12,6 +12,7 @@ import (
 	"github.com/festeh/bro/environment"
 	"github.com/festeh/bro/openrouter"
 	"github.com/festeh/bro/tools"
+	gopenrouter "github.com/revrost/go-openrouter"
 )
 
 const (
@@ -39,6 +40,7 @@ type App struct {
 	config           config.Config
 	historyIndex     int    // Current position in command history (-1 means not navigating)
 	originalInput    string // Store original input when navigating history
+	lastRequestUsage *gopenrouter.Usage // Last request usage statistics
 }
 
 func NewApp() App {
@@ -104,6 +106,7 @@ type streamChunkMsg string
 type streamDoneMsg struct{}
 type streamErrorMsg error
 type streamToolCallMsg openrouter.StreamEvent
+type streamUsageMsg openrouter.StreamEvent
 
 func (a App) streamCompletions() tea.Cmd {
 	return func() tea.Msg {
@@ -118,6 +121,8 @@ func (a App) streamCompletions() tea.Cmd {
 				a.eventChan <- streamErrorMsg(event.Error)
 			case openrouter.StreamEventToolCall:
 				a.eventChan <- streamToolCallMsg(event)
+			case openrouter.StreamEventUsage:
+				a.eventChan <- streamUsageMsg(event)
 			}
 		})
 		if err != nil {
@@ -278,6 +283,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// Add as a new pending tool call
 				a.pendingToolCalls = append(a.pendingToolCalls, newToolCall)
+			}
+		}
+		return a, a.listenForEvents()
+	case streamUsageMsg:
+		event := openrouter.StreamEvent(msg)
+		if event.Usage != nil {
+			// Store last request usage for display
+			a.lastRequestUsage = event.Usage
+			
+			// Save to daily stats if available
+			if a.config.Stats != nil {
+				if err := a.config.Stats.AddUsage(event.Usage); err != nil {
+					log.Error("Failed to save usage statistics", "error", err)
+				} else {
+					log.Info("Saved usage statistics", "tokens", event.Usage.TotalTokens, "cost", event.Usage.Cost)
+				}
 			}
 		}
 		return a, a.listenForEvents()
@@ -465,12 +486,24 @@ func (a App) View() string {
 
 	chat := chatStyle.Render(chatContent)
 	input := inputStyle.Render(fmt.Sprintf("> %s", a.input))
-	help := ""
 
-	// Debug info
-	totalLines := a.calculateTotalLines()
-	debug := fmt.Sprintf("Debug: offset=%d, totalLines=%d, maxLines=%d",
-		a.scrollOffset, totalLines, maxLines)
+	// Usage statistics info
+	var usageInfo string
+	if a.lastRequestUsage != nil {
+		var dailyCost float64
+		if a.config.Stats != nil {
+			if todayStats := a.config.Stats.GetTodaysStats(); todayStats != nil {
+				dailyCost = todayStats.TotalCost
+			}
+		}
+		usageInfo = fmt.Sprintf("Last: %d→%d tokens ($%.6f) | Daily: $%.6f",
+			a.lastRequestUsage.PromptTokens,
+			a.lastRequestUsage.CompletionTokens,
+			a.lastRequestUsage.Cost,
+			dailyCost)
+	} else {
+		usageInfo = "No usage data yet"
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, chat, input, help, debug)
+	return lipgloss.JoinVertical(lipgloss.Left, chat, input, usageInfo)
 }

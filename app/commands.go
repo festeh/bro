@@ -16,7 +16,12 @@ func (a *App) handleUserCommand(input string) bool {
 
 	cmd := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(input, "/")))
 	if cmd == "help" {
-		a.mode = "help"
+		helpText := "Available Commands:\n\n" +
+			"/help - Show this help message\n" +
+			"/stats - Show today's usage statistics\n" +
+			"/model [name] - Get current model or set model to [name]\n" +
+			"/update-models - Update the list of available models\n"
+		a.messages = append(a.messages, openrouter.NewCommandResponseMessage(helpText))
 		a.input = ""
 		return true
 	}
@@ -48,6 +53,35 @@ func (a *App) handleUserCommand(input string) bool {
 			} else {
 				a.client.SetModel(modelName)
 				a.messages = append(a.messages, openrouter.NewCommandResponseMessage(fmt.Sprintf("Model set to: %s", modelName)))
+			}
+		}
+		a.input = ""
+		return true
+	}
+
+	if cmd == "stats" {
+		if a.config.Stats == nil {
+			a.messages = append(a.messages, openrouter.NewCommandErrorResponseMessage("Stats tracking is not initialized"))
+		} else {
+			stats := a.config.Stats.GetTodaysStats()
+			if stats == nil {
+				a.messages = append(a.messages, openrouter.NewCommandErrorResponseMessage("No stats available"))
+			} else {
+				statsMsg := fmt.Sprintf("📊 Today's Usage Statistics (%s):\n\n"+
+					"🔢 Requests: %d\n"+
+					"📥 Input Tokens: %d\n"+
+					"📤 Output Tokens: %d\n"+
+					"🔄 Total Tokens: %d\n"+
+					"💰 Total Cost: $%.6f\n\n"+
+					"📁 Stats Directory: %s",
+					stats.Date,
+					stats.RequestCount,
+					stats.TotalInputTokens,
+					stats.TotalOutputTokens,
+					stats.TotalTokens,
+					stats.TotalCost,
+					a.config.Stats.GetStatsPath())
+				a.messages = append(a.messages, openrouter.NewCommandResponseMessage(statsMsg))
 			}
 		}
 		a.input = ""

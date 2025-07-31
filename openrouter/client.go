@@ -22,6 +22,7 @@ type StreamEvent struct {
 	Content   string
 	Error     error
 	ToolCalls []ToolCall
+	Usage     *openrouter.Usage
 }
 
 type ToolCall struct {
@@ -41,6 +42,7 @@ const (
 	StreamEventDone     = "done"
 	StreamEventError    = "error"
 	StreamEventToolCall = "tool_call"
+	StreamEventUsage    = "usage"
 )
 
 type StreamHandler func(StreamEvent)
@@ -114,6 +116,9 @@ func (c *Client) SendMessages(messages []openrouter.ChatCompletionMessage, handl
 		Usage: &openrouter.IncludeUsage{
 			Include: true,
 		},
+		StreamOptions: &openrouter.StreamOptions{
+			IncludeUsage: true,
+		},
 	}
 
 	stream, err := c.client.CreateChatCompletionStream(context.Background(), req)
@@ -138,6 +143,15 @@ func (c *Client) readFromStream(stream *openrouter.ChatCompletionStream, handler
 			}
 			handler(StreamEvent{Type: StreamEventError, Error: err})
 			return
+		}
+
+		// Handle usage information if present
+		if response.Usage != nil {
+			log.Info("Received usage information", "prompt_tokens", response.Usage.PromptTokens, "completion_tokens", response.Usage.CompletionTokens, "total_cost", response.Usage.Cost)
+			handler(StreamEvent{
+				Type:  StreamEventUsage,
+				Usage: response.Usage,
+			})
 		}
 
 		if len(response.Choices) > 0 {
