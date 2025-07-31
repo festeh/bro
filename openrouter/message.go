@@ -16,17 +16,14 @@ type Renderable interface {
 	Render() string
 }
 
-type ChatMessage struct {
+type AIChatMessage struct {
 	openrouter.ChatCompletionMessage
 	ModelName string
 }
 
-
-func (m *ChatMessage) Render() string {
-	prefix := "AI"
-	if m.Role == "user" {
-		prefix = "You"
-	} else if m.ModelName != "" {
+func (m *AIChatMessage) Render() string {
+	prefix := "(AI)"
+	if m.ModelName != "" {
 		// Extract the model name after the last slash for cleaner display
 		parts := strings.Split(m.ModelName, "/")
 		if len(parts) > 1 {
@@ -36,6 +33,14 @@ func (m *ChatMessage) Render() string {
 		}
 	}
 	return prefix + ": " + m.Content.Text
+}
+
+type UserChatMessage struct {
+	openrouter.ChatCompletionMessage
+}
+
+func (m *UserChatMessage) Render() string {
+	return "You: " + m.Content.Text
 }
 
 type ToolCallMessage struct {
@@ -63,18 +68,17 @@ func (m *ToolResponseMessage) Render() string {
 	return "  " + m.Result
 }
 
-func NewUserMessage(content string) *ChatMessage {
-	return &ChatMessage{
+func NewUserMessage(content string) *UserChatMessage {
+	return &UserChatMessage{
 		ChatCompletionMessage: openrouter.ChatCompletionMessage{
 			Role:    "user",
 			Content: openrouter.Content{Text: content},
 		},
-		ModelName: "",
 	}
 }
 
-func NewAssistantMessage(content string, modelName string) *ChatMessage {
-	return &ChatMessage{
+func NewAssistantMessage(content string, modelName string) *AIChatMessage {
+	return &AIChatMessage{
 		ChatCompletionMessage: openrouter.ChatCompletionMessage{
 			Role:    "assistant",
 			Content: openrouter.Content{Text: content},
@@ -83,8 +87,8 @@ func NewAssistantMessage(content string, modelName string) *ChatMessage {
 	}
 }
 
-func NewSystemMessage(content string) *ChatMessage {
-	return &ChatMessage{
+func NewSystemMessage(content string) *AIChatMessage {
+	return &AIChatMessage{
 		ChatCompletionMessage: openrouter.ChatCompletionMessage{
 			Role:    "system",
 			Content: openrouter.Content{Text: content},
@@ -127,8 +131,11 @@ func ChatMessagesToOpenRouter(messages []Renderable) []openrouter.ChatCompletion
 	var result []openrouter.ChatCompletionMessage
 	for _, msg := range messages {
 		switch m := msg.(type) {
-		case *ChatMessage:
-			// Regular chat messages (user/assistant/system)
+		case *AIChatMessage:
+			// AI chat messages (assistant/system)
+			result = append(result, m.ChatCompletionMessage)
+		case *UserChatMessage:
+			// User chat messages
 			result = append(result, m.ChatCompletionMessage)
 		case *ToolCallMessage:
 			// Assistant message with tool calls
