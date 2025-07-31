@@ -14,7 +14,6 @@ var (
 
 type Renderable interface {
 	Render() string
-	IsUser() bool
 }
 
 type ChatMessage struct {
@@ -22,13 +21,10 @@ type ChatMessage struct {
 	ModelName string
 }
 
-func (m *ChatMessage) IsUser() bool {
-	return m.Role == "user"
-}
 
 func (m *ChatMessage) Render() string {
 	prefix := "AI"
-	if m.IsUser() {
+	if m.Role == "user" {
 		prefix = "You"
 	} else if m.ModelName != "" {
 		// Extract the model name after the last slash for cleaner display
@@ -46,9 +42,6 @@ type ToolCallMessage struct {
 	ToolCall ToolCall
 }
 
-func (m *ToolCallMessage) IsUser() bool {
-	return false
-}
 
 func (m *ToolCallMessage) Render() string {
 	return fmt.Sprintf("  🔧 Executing %s: %s", m.ToolCall.Function.Name, m.ToolCall.Function.Arguments)
@@ -61,9 +54,6 @@ type ToolResponseMessage struct {
 	Error      error
 }
 
-func (m *ToolResponseMessage) IsUser() bool {
-	return false
-}
 
 func (m *ToolResponseMessage) Render() string {
 	if m.Error != nil {
@@ -107,9 +97,6 @@ type CommandResponseMessage struct {
 	content string
 }
 
-func (m *CommandResponseMessage) IsUser() bool {
-	return false
-}
 
 func (m *CommandResponseMessage) Render() string {
 	return m.content
@@ -125,9 +112,6 @@ type CommandErrorResponseMessage struct {
 	content string
 }
 
-func (m *CommandErrorResponseMessage) IsUser() bool {
-	return false
-}
 
 func (m *CommandErrorResponseMessage) Render() string {
 	return m.content
