@@ -2,12 +2,14 @@ package openrouter
 
 import (
 	"fmt"
+	"strings"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/revrost/go-openrouter"
 )
 
 var (
-	redStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	purpleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9B59B6"))
 )
 
 type Renderable interface {
@@ -15,7 +17,10 @@ type Renderable interface {
 	IsUser() bool
 }
 
-type ChatMessage openrouter.ChatCompletionMessage
+type ChatMessage struct {
+	openrouter.ChatCompletionMessage
+	ModelName string
+}
 
 func (m *ChatMessage) IsUser() bool {
 	return m.Role == "user"
@@ -25,6 +30,14 @@ func (m *ChatMessage) Render() string {
 	prefix := "AI"
 	if m.IsUser() {
 		prefix = "You"
+	} else if m.ModelName != "" {
+		// Extract the model name after the last slash for cleaner display
+		parts := strings.Split(m.ModelName, "/")
+		if len(parts) > 1 {
+			prefix = purpleStyle.Render("(" + parts[len(parts)-1] + ")")
+		} else {
+			prefix = purpleStyle.Render("(" + m.ModelName + ")")
+		}
 	}
 	return prefix + ": " + m.Content.Text
 }
@@ -62,22 +75,31 @@ func (m *ToolResponseMessage) Render() string {
 
 func NewUserMessage(content string) *ChatMessage {
 	return &ChatMessage{
-		Role:    "user",
-		Content: openrouter.Content{Text: content},
+		ChatCompletionMessage: openrouter.ChatCompletionMessage{
+			Role:    "user",
+			Content: openrouter.Content{Text: content},
+		},
+		ModelName: "",
 	}
 }
 
-func NewAssistantMessage(content string) *ChatMessage {
+func NewAssistantMessage(content string, modelName string) *ChatMessage {
 	return &ChatMessage{
-		Role:    "assistant",
-		Content: openrouter.Content{Text: content},
+		ChatCompletionMessage: openrouter.ChatCompletionMessage{
+			Role:    "assistant",
+			Content: openrouter.Content{Text: content},
+		},
+		ModelName: modelName,
 	}
 }
 
 func NewSystemMessage(content string) *ChatMessage {
 	return &ChatMessage{
-		Role:    "system",
-		Content: openrouter.Content{Text: content},
+		ChatCompletionMessage: openrouter.ChatCompletionMessage{
+			Role:    "system",
+			Content: openrouter.Content{Text: content},
+		},
+		ModelName: "",
 	}
 }
 
@@ -123,7 +145,7 @@ func ChatMessagesToOpenRouter(messages []Renderable) []openrouter.ChatCompletion
 		switch m := msg.(type) {
 		case *ChatMessage:
 			// Regular chat messages (user/assistant/system)
-			result = append(result, openrouter.ChatCompletionMessage(*m))
+			result = append(result, m.ChatCompletionMessage)
 		case *ToolCallMessage:
 			// Assistant message with tool calls
 			toolCall := openrouter.ToolCall{

@@ -211,7 +211,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Add the AI response first
 		if a.currentResponse != "" {
 			trimmedResponse := strings.TrimSpace(a.currentResponse)
-			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse))
+			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse, a.client.GetModel()))
 			
 			// Log AI response with tool calls to session
 			toolCallsForLogging := make([]interface{}, len(a.pendingToolCalls))
@@ -260,7 +260,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamErrorMsg:
-		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg)))
+		a.messages = append(a.messages, openrouter.NewAssistantMessage(fmt.Sprintf("Error: %v", msg), a.client.GetModel()))
 		a.resetToBottom()
 		return a, a.listenForEvents()
 	case streamToolCallMsg:
@@ -311,7 +311,7 @@ func (a App) calculateTotalLines() int {
 	}
 
 	if a.currentResponse != "" {
-		currentMsg := openrouter.NewAssistantMessage(a.currentResponse)
+		currentMsg := openrouter.NewAssistantMessage(a.currentResponse, a.client.GetModel())
 		rendered := currentMsg.Render()
 		totalLines += a.calculateLinesFromContent(rendered, chatWidth)
 	}
@@ -407,7 +407,7 @@ func (a App) View() string {
 
 		// Add current response if present
 		if a.currentResponse != "" {
-			currentMsg := openrouter.NewAssistantMessage(a.currentResponse)
+			currentMsg := openrouter.NewAssistantMessage(a.currentResponse, a.client.GetModel())
 			rendered := currentMsg.Render()
 			lines := strings.Split(rendered, "\n")
 			for i, line := range lines {
