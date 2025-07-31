@@ -85,13 +85,15 @@ func UpdateModels() error {
 	modelsFile := filepath.Join(homeDir, ".bro", "models.txt")
 
 	// Create a basic models.txt file with some default models
-	modelsContent := `anthropic/claude-sonnet-4
-x-ai/grok-4
-qwen/qwen3-coder
-openai/gpt-4o
-meta-llama/llama-3.1-405b-instruct
-google/gemini-2.0-flash-exp
-`
+	models := []string{
+		"anthropic/claude-sonnet-4",
+		"x-ai/grok-4",
+		"qwen/qwen3-coder",
+		"openai/gpt-4o",
+		"meta-llama/llama-3.1-405b-instruct",
+		"google/gemini-2.0-flash-exp",
+	}
+	modelsContent := strings.Join(models, "\n")
 
 	if err := os.WriteFile(modelsFile, []byte(modelsContent), 0644); err != nil {
 		return err
@@ -141,4 +143,3 @@ func (c *Config) IsValidModel(modelName string) bool {
 	}
 	return slices.Contains(c.AvailableModels, modelName)
 }
-
