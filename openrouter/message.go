@@ -32,7 +32,7 @@ func (m *AIChatMessage) Render() string {
 			prefix = purpleStyle.Render("(" + m.ModelName + ")")
 		}
 	}
-	return prefix + ": " + m.Content.Text
+	return prefix + ": " + strings.TrimSpace(m.Content.Text)
 }
 
 type UserChatMessage struct {
