@@ -13,12 +13,12 @@ func GenerateSystemPrompt() string {
 	if err != nil {
 		currentDir = "unknown"
 	}
-	
+
 	osInfo := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
-	
+
 	return fmt.Sprintf(`Current time: %s
 OS: %s
 Working directory: %s
 You are helpful CLI assistant called Bro that helps with SWE tasks or projects`,
-currentTime, osInfo, currentDir)
+		currentTime, osInfo, currentDir)
 }

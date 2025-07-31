@@ -2,13 +2,13 @@ package openrouter
 
 import (
 	"fmt"
-	"strings"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/revrost/go-openrouter"
+	"strings"
 )
 
 var (
-	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
 	purpleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9B59B6"))
 )
 
@@ -47,7 +47,6 @@ type ToolCallMessage struct {
 	ToolCall ToolCall
 }
 
-
 func (m *ToolCallMessage) Render() string {
 	return fmt.Sprintf("  🔧 Executing %s: %s", m.ToolCall.Function.Name, m.ToolCall.Function.Arguments)
 }
@@ -58,7 +57,6 @@ type ToolResponseMessage struct {
 	Result     string
 	Error      error
 }
-
 
 func (m *ToolResponseMessage) Render() string {
 	if m.Error != nil {
@@ -101,7 +99,6 @@ type CommandResponseMessage struct {
 	content string
 }
 
-
 func (m *CommandResponseMessage) Render() string {
 	return m.content
 }
@@ -115,7 +112,6 @@ func NewCommandResponseMessage(content string) *CommandResponseMessage {
 type CommandErrorResponseMessage struct {
 	content string
 }
-
 
 func (m *CommandErrorResponseMessage) Render() string {
 	return m.content

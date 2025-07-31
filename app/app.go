@@ -38,8 +38,8 @@ type App struct {
 	scrollOffset     int // For scrolling through message history
 	mode             string
 	config           config.Config
-	historyIndex     int    // Current position in command history (-1 means not navigating)
-	originalInput    string // Store original input when navigating history
+	historyIndex     int                // Current position in command history (-1 means not navigating)
+	originalInput    string             // Store original input when navigating history
 	lastRequestUsage *gopenrouter.Usage // Last request usage statistics
 }
 
@@ -168,21 +168,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if strings.TrimSpace(a.input) != "" && !a.isWaiting && a.client != nil {
 				trimmed := strings.TrimSpace(a.input)
-				
+
 				// Add command to history
 				if err := a.config.History.AddCommand(trimmed); err != nil {
 					log.Error("Failed to add command to history", "error", err)
 				}
-				
+
 				// Log user input to session
 				if err := a.config.Session.LogUserInput(trimmed); err != nil {
 					log.Error("Failed to log user input to session", "error", err)
 				}
-				
+
 				// Reset history navigation
 				a.historyIndex = -1
 				a.originalInput = ""
-				
+
 				if a.handleUserCommand(trimmed) {
 					return a, nil
 				}
@@ -217,7 +217,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.currentResponse != "" {
 			trimmedResponse := strings.TrimSpace(a.currentResponse)
 			a.messages = append(a.messages, openrouter.NewAssistantMessage(trimmedResponse, a.client.GetModel()))
-			
+
 			// Log AI response with tool calls to session
 			toolCallsForLogging := make([]interface{}, len(a.pendingToolCalls))
 			for i, toolCall := range a.pendingToolCalls {
@@ -249,7 +249,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Error:      err,
 			}
 			a.messages = append(a.messages, toolResponseMsg)
-			
+
 			// Log tool call to session
 			if err := a.config.Session.LogToolCall(toolCall.Function.Name, toolCall.Function.Arguments, result); err != nil {
 				log.Error("Failed to log tool call to session", "error", err)
@@ -291,7 +291,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if event.Usage != nil {
 			// Store last request usage for display
 			a.lastRequestUsage = event.Usage
-			
+
 			// Save to daily stats if available
 			if a.config.Stats != nil {
 				if err := a.config.Stats.AddUsage(event.Usage); err != nil {
@@ -348,12 +348,12 @@ func (a *App) resetToBottom() {
 }
 
 func (a *App) navigateHistoryUp() {
-	
+
 	commands := a.config.History.GetCommands()
 	if len(commands) == 0 {
 		return
 	}
-	
+
 	if a.historyIndex == -1 {
 		// Starting history navigation, save current input
 		a.originalInput = a.input
@@ -361,7 +361,7 @@ func (a *App) navigateHistoryUp() {
 	} else if a.historyIndex > 0 {
 		a.historyIndex--
 	}
-	
+
 	if a.historyIndex >= 0 && a.historyIndex < len(commands) {
 		a.input = commands[a.historyIndex]
 	}
@@ -371,7 +371,7 @@ func (a *App) navigateHistoryDown() {
 	if a.historyIndex == -1 {
 		return
 	}
-	
+
 	commands := a.config.History.GetCommands()
 	if a.historyIndex < len(commands)-1 {
 		a.historyIndex++

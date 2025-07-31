@@ -29,22 +29,22 @@ func TestBashToolWithAI(t *testing.T) {
 	config := &openrouter.Config{
 		Model: "qwen/qwen3-coder",
 	}
-	
+
 	client, err := openrouter.NewClient(env, config)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	type testModel struct {
-		chunks           []string
-		response         strings.Builder
-		completed        bool
-		hasError         bool
-		error            string
-		toolCallMade     bool
-		bashOutput       string
-		currentCallID    string // track the current tool call ID
-		currentArgs      string // accumulate arguments for current call
+		chunks        []string
+		response      strings.Builder
+		completed     bool
+		hasError      bool
+		error         string
+		toolCallMade  bool
+		bashOutput    string
+		currentCallID string // track the current tool call ID
+		currentArgs   string // accumulate arguments for current call
 	}
 
 	model := testModel{}
@@ -98,12 +98,12 @@ func TestBashToolWithAI(t *testing.T) {
 
 	// Ask AI to find out the username using bash - be very explicit
 	userMessage := "I need you to use the bash tool to execute the 'whoami' command and tell me what the current username is. You must use the bash tool for this."
-	
+
 	err = client.SendMessage(userMessage, handler)
 	if err != nil {
 		t.Fatalf("Failed to send message: %v", err)
 	}
-	
+
 	// Wait for completion with timeout
 	select {
 	case <-done:
@@ -116,7 +116,7 @@ func TestBashToolWithAI(t *testing.T) {
 	if model.hasError {
 		t.Fatalf("Stream had errors: %s", model.error)
 	}
-	
+
 	if !model.completed {
 		t.Fatal("Stream did not complete properly")
 	}

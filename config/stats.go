@@ -12,12 +12,12 @@ import (
 )
 
 type DailyStats struct {
-	Date             string  `json:"date"`
-	TotalInputTokens int     `json:"total_input_tokens"`
-	TotalOutputTokens int    `json:"total_output_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	TotalCost        float64 `json:"total_cost"`
-	RequestCount     int     `json:"request_count"`
+	Date              string  `json:"date"`
+	TotalInputTokens  int     `json:"total_input_tokens"`
+	TotalOutputTokens int     `json:"total_output_tokens"`
+	TotalTokens       int     `json:"total_tokens"`
+	TotalCost         float64 `json:"total_cost"`
+	RequestCount      int     `json:"request_count"`
 }
 
 type Stats struct {
@@ -41,7 +41,7 @@ func NewStats() (*Stats, error) {
 	}
 
 	currentDate := time.Now().Format("2006-01-02")
-	
+
 	stats := &Stats{
 		dirPath:     statsDir,
 		currentDate: currentDate,
@@ -57,17 +57,17 @@ func NewStats() (*Stats, error) {
 
 func (s *Stats) loadTodaysStats() error {
 	statsFile := filepath.Join(s.dirPath, fmt.Sprintf("%s.json", s.currentDate))
-	
+
 	// Check if today's stats file exists
 	if _, err := os.Stat(statsFile); os.IsNotExist(err) {
 		// Create new daily stats
 		s.dailyStats = &DailyStats{
-			Date:             s.currentDate,
-			TotalInputTokens: 0,
+			Date:              s.currentDate,
+			TotalInputTokens:  0,
 			TotalOutputTokens: 0,
-			TotalTokens:      0,
-			TotalCost:        0.0,
-			RequestCount:     0,
+			TotalTokens:       0,
+			TotalCost:         0.0,
+			RequestCount:      0,
 		}
 		return s.saveTodaysStats()
 	}
@@ -93,7 +93,7 @@ func (s *Stats) saveTodaysStats() error {
 	}
 
 	statsFile := filepath.Join(s.dirPath, fmt.Sprintf("%s.json", s.currentDate))
-	
+
 	data, err := json.MarshalIndent(s.dailyStats, "", "  ")
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (s *Stats) AddUsage(usage *openrouter.Usage) error {
 		if err := s.saveTodaysStats(); err != nil {
 			log.Error("Failed to save stats before rollover", "error", err)
 		}
-		
+
 		// Update to new date and load/create new stats
 		s.currentDate = currentDate
 		if err := s.loadTodaysStats(); err != nil {
@@ -137,15 +137,15 @@ func (s *Stats) GetTodaysStats() *DailyStats {
 	if s.dailyStats == nil {
 		return nil
 	}
-	
+
 	// Return a copy to prevent external modification
 	return &DailyStats{
-		Date:             s.dailyStats.Date,
-		TotalInputTokens: s.dailyStats.TotalInputTokens,
+		Date:              s.dailyStats.Date,
+		TotalInputTokens:  s.dailyStats.TotalInputTokens,
 		TotalOutputTokens: s.dailyStats.TotalOutputTokens,
-		TotalTokens:      s.dailyStats.TotalTokens,
-		TotalCost:        s.dailyStats.TotalCost,
-		RequestCount:     s.dailyStats.RequestCount,
+		TotalTokens:       s.dailyStats.TotalTokens,
+		TotalCost:         s.dailyStats.TotalCost,
+		RequestCount:      s.dailyStats.RequestCount,
 	}
 }
 

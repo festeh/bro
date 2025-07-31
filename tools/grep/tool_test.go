@@ -115,7 +115,7 @@ func TestGrepToolDefinition(t *testing.T) {
 	// Check required parameters
 	params := def.Function.Parameters.(map[string]interface{})
 	props := params["properties"].(map[string]interface{})
-	
+
 	if _, exists := props["pattern"]; !exists {
 		t.Error("Expected 'pattern' parameter to exist")
 	}

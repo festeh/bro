@@ -28,12 +28,12 @@ func NewSession() (*Session, error) {
 	}
 
 	broDir := filepath.Join(homeDir, ".bro")
-	
+
 	// Create session directory for today
 	now := time.Now()
 	dayDir := fmt.Sprintf("%02d%s_%d", now.Day(), now.Month().String()[:3], now.Year())
 	sessionDir := filepath.Join(broDir, dayDir)
-	
+
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func NewSession() (*Session, error) {
 	// Create session file with current time
 	sessionFilename := fmt.Sprintf("%02d_%02d.jsonl", now.Hour(), now.Minute())
 	sessionPath := filepath.Join(sessionDir, sessionFilename)
-	
+
 	sessionFile, err := os.OpenFile(sessionPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (s *Session) LogAIResponseWithToolCalls(response string, toolCalls []interf
 		"response":   response,
 		"tool_calls": toolCalls,
 	}
-	
+
 	entry := SessionEntry{
 		Timestamp: time.Now(),
 		Type:      "ai_response",
@@ -91,7 +91,7 @@ func (s *Session) LogToolCall(toolName string, params interface{}, result interf
 		"parameters": params,
 		"result":     result,
 	}
-	
+
 	entry := SessionEntry{
 		Timestamp: time.Now(),
 		Type:      "tool_call",
@@ -99,7 +99,6 @@ func (s *Session) LogToolCall(toolName string, params interface{}, result interf
 	}
 	return s.writeEntry(entry)
 }
-
 
 func (s *Session) writeEntry(entry SessionEntry) error {
 	if s.sessionFile == nil {

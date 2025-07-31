@@ -229,7 +229,7 @@ func TestReadFileToolDefinition(t *testing.T) {
 	// Check required parameters
 	params := def.Function.Parameters.(map[string]interface{})
 	props := params["properties"].(map[string]interface{})
-	
+
 	if _, exists := props["path"]; !exists {
 		t.Error("Expected 'path' parameter to exist")
 	}

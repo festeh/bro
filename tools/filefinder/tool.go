@@ -142,4 +142,3 @@ func (t *Tool) GetDefinition() openrouter.Tool {
 		},
 	}
 }
-

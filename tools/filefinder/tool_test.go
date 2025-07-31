@@ -22,7 +22,7 @@ func TestFileFinderToolWithAI(t *testing.T) {
 	config := &openrouter.Config{
 		Model: "qwen/qwen3-coder",
 	}
-	
+
 	client, err := openrouter.NewClient(env, config)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -100,12 +100,12 @@ func TestFileFinderToolWithAI(t *testing.T) {
 
 	// Ask AI to find all tool_test.go files using the filefinder tool
 	userMessage := "I need you to use the filefinder tool to find all files named 'tool_test.go' in the current directory and subdirectories. Use a glob pattern to match these files. You must use the filefinder tool for this."
-	
+
 	err = client.SendMessage(userMessage, handler)
 	if err != nil {
 		t.Fatalf("Failed to send message: %v", err)
 	}
-	
+
 	// Wait for completion with timeout
 	select {
 	case <-done:
@@ -118,7 +118,7 @@ func TestFileFinderToolWithAI(t *testing.T) {
 	if model.hasError {
 		t.Fatalf("Stream had errors: %s", model.error)
 	}
-	
+
 	if !model.completed {
 		t.Fatal("Stream did not complete properly")
 	}
@@ -161,40 +161,40 @@ func TestFileFinderToolWithAI(t *testing.T) {
 
 func TestFileFinderBasic(t *testing.T) {
 	tool := filefinder.NewTool()
-	
+
 	if tool.Name() != "filefinder" {
 		t.Errorf("Expected name 'filefinder', got '%s'", tool.Name())
 	}
-	
+
 	def := tool.GetDefinition()
 	if def.Function.Name != "filefinder" {
 		t.Errorf("Expected function name 'filefinder', got '%s'", def.Function.Name)
 	}
-	
+
 	if def.Function.Description == "" {
 		t.Error("Description should not be empty")
 	}
-	
+
 	// Test basic execution with glob pattern
 	args := map[string]interface{}{
 		"pattern": "*.go",
 		"glob":    true,
 	}
-	
+
 	argsJSON, err := json.Marshal(args)
 	if err != nil {
 		t.Fatalf("Failed to marshal args: %v", err)
 	}
-	
+
 	result, err := tool.Execute(argsJSON)
 	if err != nil {
 		t.Fatalf("Tool execution failed: %v", err)
 	}
-	
+
 	message := result
-	
+
 	t.Logf("FileFinder result: %s", message)
-	
+
 	// Basic validation that we got a proper response
 	if !strings.Contains(message, "Found") && !strings.Contains(message, "No files found") {
 		t.Errorf("Expected message to contain 'Found' or 'No files found', got: %s", message)

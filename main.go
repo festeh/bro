@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/charmbracelet/log"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 	"github.com/festeh/bro/app"
 	"github.com/festeh/bro/config"
 	"os"
@@ -43,5 +43,3 @@ func main() {
 
 	log.Info("Application exiting")
 }
-
-

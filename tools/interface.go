@@ -11,13 +11,13 @@ import (
 type Tool interface {
 	// Name returns the unique name of the tool
 	Name() string
-	
+
 	// Description returns a detailed description of what the tool does and when to use it
 	Description() string
-	
+
 	// Execute runs the tool with the given arguments and returns the result
 	Execute(args json.RawMessage) (string, error)
-	
+
 	// GetDefinition returns the OpenRouter tool definition for this tool
 	GetDefinition() openrouter.Tool
 }

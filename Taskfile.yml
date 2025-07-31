@@ -5,6 +5,10 @@ tasks:
     cmds:
       - go run main.go
 
+  format:
+    cmds:
+      - go fmt ./...
+
   test_scroll:
     cmds:
       - cd e2e/scroll && go build -o scroll main.go

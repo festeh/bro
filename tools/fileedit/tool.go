@@ -96,7 +96,7 @@ func (t *Tool) Execute(args json.RawMessage) (string, error) {
 	// Count occurrences to ensure uniqueness
 	occurrences := strings.Count(contentStr, editArgs.OldString)
 	if occurrences > 1 {
-		return fmt.Sprintf("Error: string '%s' appears %d times in file '%s'. String must be unique to avoid ambiguity", 
+		return fmt.Sprintf("Error: string '%s' appears %d times in file '%s'. String must be unique to avoid ambiguity",
 			editArgs.OldString, occurrences, editArgs.Path), nil
 	}
 

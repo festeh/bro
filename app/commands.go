@@ -8,7 +8,6 @@ import (
 	"github.com/festeh/bro/openrouter"
 )
 
-
 func (a *App) handleUserCommand(input string) bool {
 	if !strings.HasPrefix(input, "/") {
 		return false
@@ -93,4 +92,3 @@ func (a *App) handleUserCommand(input string) bool {
 	a.input = ""
 	return true
 }
-

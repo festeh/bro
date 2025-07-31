@@ -386,7 +386,7 @@ func TestFileEditToolDefinition(t *testing.T) {
 	// Check required parameters
 	params := def.Function.Parameters.(map[string]interface{})
 	props := params["properties"].(map[string]interface{})
-	
+
 	requiredFields := []string{"path", "old_string", "new_string"}
 	for _, field := range requiredFields {
 		if _, exists := props[field]; !exists {

@@ -17,11 +17,11 @@ type Args struct {
 }
 
 type Result struct {
-	Pattern  string   `json:"pattern"`
-	Path     string   `json:"path"`
-	Matches  []string `json:"matches"`
-	Count    int      `json:"count"`
-	Error    string   `json:"error,omitempty"`
+	Pattern string   `json:"pattern"`
+	Path    string   `json:"path"`
+	Matches []string `json:"matches"`
+	Count   int      `json:"count"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // Tool represents the grep tool implementation
@@ -117,7 +117,7 @@ func (t *Tool) Execute(args json.RawMessage) (string, error) {
 	} else {
 		// Matches found
 		lines := strings.Split(output, "\n")
-		
+
 		// Count actual match lines (lines with line numbers, not context lines)
 		matchCount := 0
 		for _, line := range lines {

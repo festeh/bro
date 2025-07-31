@@ -18,7 +18,7 @@ func TestClientStreaming(t *testing.T) {
 	config := &Config{
 		Model: "openai/gpt-3.5-turbo",
 	}
-	
+
 	client, err := NewClient(env, config)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -55,7 +55,7 @@ func TestClientStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to send message: %v", err)
 	}
-	
+
 	// Wait for completion with timeout
 	select {
 	case <-done:
@@ -68,20 +68,20 @@ func TestClientStreaming(t *testing.T) {
 	if model.hasError {
 		t.Fatalf("Stream had errors: %s", model.error)
 	}
-	
+
 	if !model.completed {
 		t.Fatal("Stream did not complete properly")
 	}
-	
+
 	if len(model.chunks) <= 1 {
 		t.Fatalf("Expected more than 1 chunk, got %d chunks", len(model.chunks))
 	}
-	
+
 	finalResponse := model.response.String()
 	if strings.TrimSpace(finalResponse) == "" {
 		t.Fatal("Response is empty")
 	}
-	
+
 	t.Logf("Successfully received %d chunks", len(model.chunks))
 	t.Logf("Final response: %s", finalResponse)
 }

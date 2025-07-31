@@ -14,7 +14,7 @@ func NewEnvironment() (*Environment, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
 	}
-	
+
 	return &Environment{
 		APIKey: apiKey,
 	}, nil

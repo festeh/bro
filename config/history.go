@@ -31,7 +31,7 @@ func NewHistory() (*History, error) {
 	}
 
 	dirPath := filepath.Join(homeDir, ".bro")
-	
+
 	h := &History{
 		commands: make([]string, HISTORY_SIZE),
 		head:     0,
@@ -62,7 +62,7 @@ func (h *History) AddCommand(command string) error {
 
 	h.commands[h.head] = command
 	h.head = (h.head + 1) % HISTORY_SIZE
-	
+
 	if h.size < HISTORY_SIZE {
 		h.size++
 	}
@@ -76,7 +76,7 @@ func (h *History) GetCommands() []string {
 	}
 
 	result := make([]string, h.size)
-	
+
 	if h.size < HISTORY_SIZE {
 		// Buffer not full yet
 		copy(result, h.commands[:h.size])
@@ -142,13 +142,13 @@ func (h *History) load() error {
 	defer indexFile.Close()
 
 	scanner := bufio.NewScanner(indexFile)
-	
+
 	if scanner.Scan() {
 		if h.head, err = strconv.Atoi(strings.TrimSpace(scanner.Text())); err != nil {
 			return err
 		}
 	}
-	
+
 	if scanner.Scan() {
 		if h.size, err = strconv.Atoi(strings.TrimSpace(scanner.Text())); err != nil {
 			return err

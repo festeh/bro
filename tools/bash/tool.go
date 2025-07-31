@@ -45,14 +45,14 @@ func (t *Tool) Execute(args json.RawMessage) (string, error) {
 	if err := json.Unmarshal(args, &bashArgs); err != nil {
 		return "", err
 	}
-	
+
 	cmd := exec.Command("bash", "-c", bashArgs.Command)
-	
+
 	stdout, err := cmd.Output()
-	
+
 	// Build assistant message response
 	var message strings.Builder
-	
+
 	if exitError, ok := err.(*exec.ExitError); ok {
 		// Command failed with non-zero exit code
 		message.WriteString(fmt.Sprintf("Command failed with exit code %d:\n", exitError.ExitCode()))
@@ -73,7 +73,7 @@ func (t *Tool) Execute(args json.RawMessage) (string, error) {
 			message.WriteString("Command completed successfully (no output)")
 		}
 	}
-	
+
 	return message.String(), nil
 }
 
@@ -97,4 +97,3 @@ func (t *Tool) GetDefinition() openrouter.Tool {
 		},
 	}
 }
-
