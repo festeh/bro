@@ -1,4 +1,4 @@
-package `in`.dimalip.bro
+package com.github.festeh.bro
 
 import io.flutter.embedding.android.FlutterActivity
 

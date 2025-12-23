@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "in.dimalip.bro"
+    namespace = "com.github.festeh.bro"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "in.dimalip.bro"
+        applicationId = "com.github.festeh.bro"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -41,4 +41,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Wear DataLayer API for receiving speech from watch
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    // Coroutines for Play Services Tasks
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }

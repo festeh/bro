@@ -16,15 +16,24 @@ import com.github.festeh.bro_wear.R
 import com.github.festeh.bro_wear.audio.AudioCapture
 import com.github.festeh.bro_wear.audio.PreRollBuffer
 import com.github.festeh.bro_wear.audio.SpeechBuffer
+import com.github.festeh.bro_wear.audio.SpeechSegment
 import com.github.festeh.bro_wear.bridge.VadStateStream
+import com.github.festeh.bro_wear.codec.OpusEncoder
 import com.github.festeh.bro_wear.power.WakeLockManager
+import com.github.festeh.bro_wear.sync.SpeechDataSender
 import com.github.festeh.bro_wear.vad.VadConfig
 import com.github.festeh.bro_wear.vad.VadResult
 import com.github.festeh.bro_wear.vad.WebRtcVadEngine
+import com.github.festeh.bro_wear.util.L
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AudioService : Service() {
 
     companion object {
+        private const val TAG = "AudioService"
         private const val CHANNEL_ID = "bro_wear_audio"
         private const val NOTIFICATION_ID = 1
     }
@@ -38,6 +47,11 @@ class AudioService : Service() {
     private lateinit var preRollBuffer: PreRollBuffer
     private lateinit var speechBuffer: SpeechBuffer
     private lateinit var wakeLockManager: WakeLockManager
+    private lateinit var opusEncoder: OpusEncoder
+    private lateinit var dataSender: SpeechDataSender
+
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
     private var isInSpeech = false
     private var silenceStartTime: Long = 0
@@ -48,16 +62,25 @@ class AudioService : Service() {
     }
 
     override fun onCreate() {
+        L.d(TAG, "onCreate start")
         super.onCreate()
         createNotificationChannel()
         preRollBuffer = PreRollBuffer(config.sampleRate, config.preRollMs)
         speechBuffer = SpeechBuffer(config.sampleRate, config.maxSpeechMs)
         wakeLockManager = WakeLockManager(this)
+        opusEncoder = OpusEncoder()
+        opusEncoder.init()
+        dataSender = SpeechDataSender(this)
+        L.d(TAG, "onCreate done")
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder {
+        L.d(TAG, "onBind")
+        return binder
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        L.d(TAG, "onStartCommand")
         startForegroundService()
         return START_STICKY
     }
@@ -67,25 +90,30 @@ class AudioService : Service() {
     }
 
     fun startListening(): Boolean {
+        L.d(TAG, "startListening called, listening=$listening")
         if (listening) return true
 
         vadEngine.start(config)
+        L.d(TAG, "VAD engine started")
 
         audioCapture = AudioCapture(config) { audioFrame ->
             processAudioFrame(audioFrame)
         }
 
         if (!audioCapture!!.start()) {
+            L.e(TAG, "AudioCapture failed to start")
             vadEngine.stop()
             return false
         }
 
         listening = true
+        L.d(TAG, "startListening success")
         vadStateStream?.emitStatus("listening")
         return true
     }
 
     fun stopListening() {
+        L.d(TAG, "stopListening called, listening=$listening")
         if (!listening) return
 
         listening = false
@@ -100,6 +128,7 @@ class AudioService : Service() {
 
         preRollBuffer.clear()
         vadStateStream?.emitStatus("idle")
+        L.d(TAG, "stopListening done")
     }
 
     fun isListening(): Boolean = listening
@@ -159,13 +188,37 @@ class AudioService : Service() {
 
         // Discard if too short
         if (segment.durationMs < config.minSpeechMs) {
+            L.d(TAG, "Segment too short: ${segment.durationMs}ms, discarding")
             speechBuffer.clear()
             return
         }
 
-        // TODO: Save segment to disk (Phase 2)
-        // For now, just log it
-        android.util.Log.d("AudioService", "Speech segment: ${segment.durationMs}ms")
+        // Encode to Opus
+        val opusData = try {
+            opusEncoder.encode(segment.data)
+        } catch (e: Exception) {
+            L.e(TAG, "Failed to encode segment: ${e.message}")
+            speechBuffer.clear()
+            return
+        }
+
+        val encodedSegment = segment.copy(opusData = opusData)
+        val compressionRatio = segment.data.size * 2f / opusData.size
+
+        L.d(TAG, "Speech segment: ${segment.durationMs}ms, " +
+            "PCM: ${segment.data.size * 2} bytes, " +
+            "Opus: ${opusData.size} bytes, " +
+            "ratio: %.1fx".format(compressionRatio))
+
+        // Send to phone asynchronously
+        serviceScope.launch {
+            val success = dataSender.send(encodedSegment)
+            if (success) {
+                L.d(TAG, "Segment ${segment.id} sent to phone")
+            } else {
+                L.e(TAG, "Failed to send segment ${segment.id}")
+            }
+        }
 
         speechBuffer.clear()
     }
@@ -215,7 +268,10 @@ class AudioService : Service() {
     }
 
     override fun onDestroy() {
+        L.d(TAG, "onDestroy")
         stopListening()
+        opusEncoder.release()
+        serviceJob.cancel()
         super.onDestroy()
     }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/platform/audio_bridge.dart';
 import '../../core/platform/vad_state.dart';
+import '../../core/log.dart';
 import 'widgets/vad_indicator.dart';
 
 class MonitorPage extends StatefulWidget {
@@ -21,11 +22,14 @@ class _MonitorPageState extends State<MonitorPage> {
   @override
   void initState() {
     super.initState();
+    log.d('MonitorPage: initState');
     _checkPermissionAndSetup();
   }
 
   Future<void> _checkPermissionAndSetup() async {
+    log.d('MonitorPage: _checkPermissionAndSetup');
     final permission = await _audioBridge.checkPermission();
+    log.d('MonitorPage: permission=$permission');
     setState(() {
       _state = _state.copyWith(permission: permission);
     });

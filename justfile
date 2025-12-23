@@ -52,7 +52,7 @@ wear-build:
 
 # View wear logs
 wear-logs:
-    adb logcat | grep -E "(Flutter|AudioService|bro_wear)"
+    adb logcat | grep -E "(BroWear|flutter|Fatal|FATAL|Exception)"
 
 # ─────────────────────────────────────────────────────────────
 # Phone

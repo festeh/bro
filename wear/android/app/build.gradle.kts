@@ -45,4 +45,10 @@ flutter {
 dependencies {
     // VAD - WebRTC (default, 158KB, battery efficient)
     implementation("com.github.gkonovalov.android-vad:webrtc:2.0.10")
+    // Opus encoding
+    implementation("com.github.martoreto:opuscodec:v1.2.1.2")
+    // Wear DataLayer API for phone sync
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    // Coroutines for Play Services Tasks
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'vad_state.dart';
+import '../log.dart';
 
 class AudioBridge {
   static const _eventChannel = EventChannel('com.github.festeh.bro_wear/vad_state');
@@ -9,6 +10,7 @@ class AudioBridge {
   Stream<VadState>? _vadStateStream;
 
   Stream<VadState> get vadStateStream {
+    log.d('AudioBridge: setting up vadStateStream');
     _vadStateStream ??= _eventChannel
         .receiveBroadcastStream()
         .map((event) => VadState.fromMap(event as Map<dynamic, dynamic>));
@@ -16,28 +18,36 @@ class AudioBridge {
   }
 
   Future<PermissionStatus> checkPermission() async {
+    log.d('AudioBridge: checkPermission');
     final result = await _methodChannel.invokeMethod<String>('checkPermission');
+    log.d('AudioBridge: checkPermission result=$result');
     return _parsePermissionStatus(result);
   }
 
   Future<void> requestPermission() async {
+    log.d('AudioBridge: requestPermission');
     await _methodChannel.invokeMethod<bool>('requestPermission');
   }
 
   Future<void> openSettings() async {
+    log.d('AudioBridge: openSettings');
     await _methodChannel.invokeMethod<bool>('openSettings');
   }
 
   Future<bool> start() async {
+    log.d('AudioBridge: start');
     final result = await _methodChannel.invokeMethod<bool>('start');
+    log.d('AudioBridge: start result=$result');
     return result ?? false;
   }
 
   Future<void> stop() async {
+    log.d('AudioBridge: stop');
     await _methodChannel.invokeMethod<bool>('stop');
   }
 
   Future<Map<String, dynamic>> getStatus() async {
+    log.d('AudioBridge: getStatus');
     final result = await _methodChannel.invokeMethod<Map>('getStatus');
     return Map<String, dynamic>.from(result ?? {});
   }

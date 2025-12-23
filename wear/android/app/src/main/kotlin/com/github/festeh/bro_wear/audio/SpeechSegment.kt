@@ -7,7 +7,8 @@ data class SpeechSegment(
     val startTime: Long,
     val endTime: Long,
     val sampleRate: Int = 16000,
-    val data: ShortArray
+    val data: ShortArray,
+    val opusData: ByteArray? = null
 ) {
     val durationMs: Long get() = endTime - startTime
 
