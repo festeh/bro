@@ -1,0 +1,221 @@
+package com.github.festeh.bro_wear.service
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Binder
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import com.github.festeh.bro_wear.MainActivity
+import com.github.festeh.bro_wear.R
+import com.github.festeh.bro_wear.audio.AudioCapture
+import com.github.festeh.bro_wear.audio.PreRollBuffer
+import com.github.festeh.bro_wear.audio.SpeechBuffer
+import com.github.festeh.bro_wear.bridge.VadStateStream
+import com.github.festeh.bro_wear.power.WakeLockManager
+import com.github.festeh.bro_wear.vad.VadConfig
+import com.github.festeh.bro_wear.vad.VadResult
+import com.github.festeh.bro_wear.vad.WebRtcVadEngine
+
+class AudioService : Service() {
+
+    companion object {
+        private const val CHANNEL_ID = "bro_wear_audio"
+        private const val NOTIFICATION_ID = 1
+    }
+
+    private val binder = LocalBinder()
+    private var vadStateStream: VadStateStream? = null
+
+    private val config = VadConfig()
+    private val vadEngine = WebRtcVadEngine()
+    private var audioCapture: AudioCapture? = null
+    private lateinit var preRollBuffer: PreRollBuffer
+    private lateinit var speechBuffer: SpeechBuffer
+    private lateinit var wakeLockManager: WakeLockManager
+
+    private var isInSpeech = false
+    private var silenceStartTime: Long = 0
+    private var listening = false
+
+    inner class LocalBinder : Binder() {
+        fun getService(): AudioService = this@AudioService
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        preRollBuffer = PreRollBuffer(config.sampleRate, config.preRollMs)
+        speechBuffer = SpeechBuffer(config.sampleRate, config.maxSpeechMs)
+        wakeLockManager = WakeLockManager(this)
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForegroundService()
+        return START_STICKY
+    }
+
+    fun setVadStateStream(stream: VadStateStream?) {
+        vadStateStream = stream
+    }
+
+    fun startListening(): Boolean {
+        if (listening) return true
+
+        vadEngine.start(config)
+
+        audioCapture = AudioCapture(config) { audioFrame ->
+            processAudioFrame(audioFrame)
+        }
+
+        if (!audioCapture!!.start()) {
+            vadEngine.stop()
+            return false
+        }
+
+        listening = true
+        vadStateStream?.emitStatus("listening")
+        return true
+    }
+
+    fun stopListening() {
+        if (!listening) return
+
+        listening = false
+        audioCapture?.stop()
+        audioCapture = null
+        vadEngine.stop()
+
+        // Finalize any pending speech
+        if (isInSpeech) {
+            finalizeSpeechSegment()
+        }
+
+        preRollBuffer.clear()
+        vadStateStream?.emitStatus("idle")
+    }
+
+    fun isListening(): Boolean = listening
+
+    private fun processAudioFrame(audioFrame: ShortArray) {
+        // Always write to pre-roll buffer
+        preRollBuffer.write(audioFrame)
+
+        val result = vadEngine.process(audioFrame)
+        vadStateStream?.emit(result)
+
+        if (result.isSpeech) {
+            handleSpeechDetected(audioFrame)
+        } else {
+            handleSilenceDetected()
+        }
+    }
+
+    private fun handleSpeechDetected(audioFrame: ShortArray) {
+        if (!isInSpeech) {
+            // Transition to speech: flush pre-roll
+            isInSpeech = true
+            wakeLockManager.acquireForWrite()
+            val preRoll = preRollBuffer.flush()
+            speechBuffer.start(preRoll)
+        }
+
+        speechBuffer.append(audioFrame)
+        silenceStartTime = 0
+
+        // Check max duration
+        if (speechBuffer.isMaxDurationReached()) {
+            finalizeSpeechSegment()
+            isInSpeech = false
+            wakeLockManager.release()
+        }
+    }
+
+    private fun handleSilenceDetected() {
+        if (!isInSpeech) return
+
+        if (silenceStartTime == 0L) {
+            silenceStartTime = System.currentTimeMillis()
+        }
+
+        val silenceDuration = System.currentTimeMillis() - silenceStartTime
+        if (silenceDuration >= config.silenceTimeoutMs) {
+            finalizeSpeechSegment()
+            isInSpeech = false
+            silenceStartTime = 0
+            wakeLockManager.release()
+        }
+    }
+
+    private fun finalizeSpeechSegment() {
+        val segment = speechBuffer.toSegment()
+
+        // Discard if too short
+        if (segment.durationMs < config.minSpeechMs) {
+            speechBuffer.clear()
+            return
+        }
+
+        // TODO: Save segment to disk (Phase 2)
+        // For now, just log it
+        android.util.Log.d("AudioService", "Speech segment: ${segment.durationMs}ms")
+
+        speechBuffer.clear()
+    }
+
+    private fun startForegroundService() {
+        val notification = createNotification()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Audio Listening",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Voice activity detection service"
+            setShowBadge(false)
+        }
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun createNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Bro")
+            .setContentText("Listening...")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .build()
+    }
+
+    override fun onDestroy() {
+        stopListening()
+        super.onDestroy()
+    }
+}

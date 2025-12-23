@@ -1,0 +1,188 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../../core/platform/audio_bridge.dart';
+import '../../core/platform/vad_state.dart';
+import 'widgets/vad_indicator.dart';
+
+class MonitorPage extends StatefulWidget {
+  const MonitorPage({super.key});
+
+  @override
+  State<MonitorPage> createState() => _MonitorPageState();
+}
+
+class _MonitorPageState extends State<MonitorPage> {
+  final _audioBridge = AudioBridge();
+  StreamSubscription<VadState>? _vadSubscription;
+
+  VadState _state = const VadState();
+  bool _isListening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissionAndSetup();
+  }
+
+  Future<void> _checkPermissionAndSetup() async {
+    final permission = await _audioBridge.checkPermission();
+    setState(() {
+      _state = _state.copyWith(permission: permission);
+    });
+
+    if (permission == PermissionStatus.granted) {
+      _setupVadStream();
+    }
+  }
+
+  void _setupVadStream() {
+    _vadSubscription = _audioBridge.vadStateStream.listen((state) {
+      setState(() {
+        _state = state.copyWith(permission: _state.permission);
+      });
+    });
+  }
+
+  Future<void> _requestPermission() async {
+    await _audioBridge.requestPermission();
+    // Check again after request
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _checkPermissionAndSetup();
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _audioBridge.stop();
+      setState(() {
+        _isListening = false;
+        _state = _state.copyWith(status: VadStatus.idle);
+      });
+    } else {
+      final success = await _audioBridge.start();
+      if (success) {
+        setState(() {
+          _isListening = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _vadSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: _buildContent(),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_state.permission != PermissionStatus.granted) {
+      return _buildPermissionRequest();
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        VadIndicator(status: _state.status),
+        const SizedBox(height: 16),
+        Text(
+          _getStatusText(),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _buildToggleButton(),
+      ],
+    );
+  }
+
+  Widget _buildPermissionRequest() {
+    final isPermanentlyDenied =
+        _state.permission == PermissionStatus.permanentlyDenied;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.mic_off,
+            size: 48,
+            color: Colors.white54,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isPermanentlyDenied
+                ? 'Microphone permission denied'
+                : 'Microphone permission required',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: isPermanentlyDenied
+                ? () => _audioBridge.openSettings()
+                : _requestPermission,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: Text(
+              isPermanentlyDenied ? 'Open Settings' : 'Grant Permission',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleButton() {
+    return GestureDetector(
+      onTap: _toggleListening,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: _isListening ? Colors.red.shade700 : Colors.blue.shade700,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          _isListening ? 'Stop' : 'Start',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getStatusText() {
+    switch (_state.status) {
+      case VadStatus.speech:
+        return 'Speaking...';
+      case VadStatus.silence:
+        return 'Listening';
+      case VadStatus.listening:
+        return 'Ready';
+      case VadStatus.error:
+        return 'Error';
+      case VadStatus.idle:
+        return 'Stopped';
+    }
+  }
+}
