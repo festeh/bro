@@ -34,10 +34,15 @@ class _HomePageState extends State<HomePage> {
       final List<dynamic> filesList = result as List<dynamic>;
 
       setState(() {
-        _files = filesList
-            .map((item) => SpeechFile.fromMap(Map<String, dynamic>.from(item)))
-            .toList()
-          ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Newest first
+        _files =
+            filesList
+                .map(
+                  (item) => SpeechFile.fromMap(Map<String, dynamic>.from(item)),
+                )
+                .toList()
+              ..sort(
+                (a, b) => b.timestamp.compareTo(a.timestamp),
+              ); // Newest first
       });
     } on PlatformException catch (e) {
       debugPrint('Failed to load files: ${e.message}');
@@ -50,7 +55,9 @@ class _HomePageState extends State<HomePage> {
     try {
       final connected = await _channel.invokeMethod('isWatchConnected');
       setState(() {
-        _syncStatus = connected ? SyncStatus.connected : SyncStatus.disconnected;
+        _syncStatus = connected
+            ? SyncStatus.connected
+            : SyncStatus.disconnected;
       });
     } on PlatformException catch (e) {
       debugPrint('Failed to check connection: ${e.message}');
@@ -71,10 +78,7 @@ class _HomePageState extends State<HomePage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Delete',
-              style: TextStyle(color: Tokens.error),
-            ),
+            child: Text('Delete', style: TextStyle(color: Tokens.error)),
           ),
         ],
       ),
@@ -103,12 +107,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bro'),
-        actions: [
-          SyncIndicator(
-            status: _syncStatus,
-            onTap: _onRefresh,
-          ),
-        ],
+        actions: [SyncIndicator(status: _syncStatus, onTap: _onRefresh)],
       ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
@@ -130,17 +129,13 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.mic_off,
-              size: 64,
-              color: Tokens.textTertiary,
-            ),
+            Icon(Icons.mic_off, size: 64, color: Tokens.textTertiary),
             const SizedBox(height: Tokens.spacingMd),
             Text(
               'No recordings yet',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Tokens.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Tokens.textSecondary),
             ),
             const SizedBox(height: Tokens.spacingSm),
             Text(
@@ -157,10 +152,7 @@ class _HomePageState extends State<HomePage> {
       itemCount: _files.length,
       itemBuilder: (context, index) {
         final file = _files[index];
-        return AudioTile(
-          file: file,
-          onDelete: () => _deleteFile(file),
-        );
+        return AudioTile(file: file, onDelete: () => _deleteFile(file));
       },
     );
   }

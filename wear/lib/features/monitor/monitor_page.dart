@@ -81,9 +81,7 @@ class _MonitorPageState extends State<MonitorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: _buildContent(),
-      ),
+      body: Center(child: _buildContent()),
     );
   }
 
@@ -99,10 +97,7 @@ class _MonitorPageState extends State<MonitorPage> {
         const SizedBox(height: 16),
         Text(
           _getStatusText(),
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 14,
-          ),
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
         const SizedBox(height: 24),
         _buildToggleButton(),
@@ -119,21 +114,14 @@ class _MonitorPageState extends State<MonitorPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.mic_off,
-            size: 48,
-            color: Colors.white54,
-          ),
+          const Icon(Icons.mic_off, size: 48, color: Colors.white54),
           const SizedBox(height: 16),
           Text(
             isPermanentlyDenied
                 ? 'Microphone permission denied'
                 : 'Microphone permission required',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 16),
           ElevatedButton(

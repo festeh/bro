@@ -43,6 +43,11 @@ class ChannelManager(
         service?.setVadStateStream(vadStateStream)
     }
 
+    fun notifyPermissionDenied() {
+        L.d(TAG, "notifyPermissionDenied")
+        methodChannel?.invokeMethod("onPermissionDenied", null)
+    }
+
     fun dispose() {
         L.d(TAG, "dispose")
         eventChannel?.setStreamHandler(null)

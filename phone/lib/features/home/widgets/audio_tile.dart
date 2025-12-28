@@ -8,11 +8,7 @@ class AudioTile extends StatefulWidget {
   final SpeechFile file;
   final VoidCallback? onDelete;
 
-  const AudioTile({
-    super.key,
-    required this.file,
-    this.onDelete,
-  });
+  const AudioTile({super.key, required this.file, this.onDelete});
 
   @override
   State<AudioTile> createState() => _AudioTileState();
@@ -103,7 +99,9 @@ class _AudioTileState extends State<AudioTile> {
                 IconButton(
                   onPressed: _togglePlayPause,
                   icon: Icon(
-                    _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                    _isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_filled,
                     size: Tokens.iconSizeLg,
                     color: Tokens.primary,
                   ),

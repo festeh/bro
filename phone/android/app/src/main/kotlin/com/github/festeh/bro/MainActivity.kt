@@ -1,6 +1,13 @@
 package com.github.festeh.bro
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.util.Log
+import com.github.festeh.bro.bridge.ChatChannelManager
+import com.github.festeh.bro.service.AiChatService
 import com.github.festeh.bro.storage.SpeechStorage
 import com.google.android.gms.wearable.Wearable
 import io.flutter.embedding.android.FlutterActivity
@@ -22,8 +29,40 @@ class MainActivity : FlutterActivity() {
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val storage by lazy { SpeechStorage(this) }
 
+    // Chat service
+    private var chatService: AiChatService? = null
+    private var chatChannelManager: ChatChannelManager? = null
+    private var chatServiceBound = false
+
+    private val chatServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            Log.d(TAG, "Chat service connected")
+            val localBinder = binder as AiChatService.LocalBinder
+            chatService = localBinder.getService()
+            chatServiceBound = true
+            chatChannelManager?.setChatService(chatService)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            Log.d(TAG, "Chat service disconnected")
+            chatService = null
+            chatServiceBound = false
+            chatChannelManager?.setChatService(null)
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Setup chat channel manager
+        chatChannelManager = ChatChannelManager(flutterEngine.dartExecutor.binaryMessenger)
+        chatChannelManager?.setup()
+
+        // Start and bind to chat service
+        Intent(this, AiChatService::class.java).also { intent ->
+            startService(intent)
+            bindService(intent, chatServiceConnection, Context.BIND_AUTO_CREATE)
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -90,5 +129,15 @@ class MainActivity : FlutterActivity() {
         val name = file.nameWithoutExtension
         val parts = name.split("_", limit = 2)
         return parts.firstOrNull()?.toLongOrNull() ?: file.lastModified()
+    }
+
+    override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
+        if (chatServiceBound) {
+            unbindService(chatServiceConnection)
+            chatServiceBound = false
+        }
+        chatChannelManager?.dispose()
+        super.onDestroy()
     }
 }

@@ -25,13 +25,7 @@ class VadIndicator extends StatelessWidget {
               ]
             : null,
       ),
-      child: Center(
-        child: Icon(
-          _getIcon(),
-          size: 48,
-          color: Colors.white,
-        ),
-      ),
+      child: Center(child: Icon(_getIcon(), size: 48, color: Colors.white)),
     );
   }
 

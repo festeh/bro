@@ -7,11 +7,7 @@ class SyncIndicator extends StatelessWidget {
   final SyncStatus status;
   final VoidCallback? onTap;
 
-  const SyncIndicator({
-    super.key,
-    required this.status,
-    this.onTap,
-  });
+  const SyncIndicator({super.key, required this.status, this.onTap});
 
   @override
   Widget build(BuildContext context) {

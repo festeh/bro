@@ -4,16 +4,20 @@ import 'vad_state.dart';
 import '../log.dart';
 
 class AudioBridge {
-  static const _eventChannel = EventChannel('com.github.festeh.bro_wear/vad_state');
-  static const _methodChannel = MethodChannel('com.github.festeh.bro_wear/commands');
+  static const _eventChannel = EventChannel(
+    'com.github.festeh.bro_wear/vad_state',
+  );
+  static const _methodChannel = MethodChannel(
+    'com.github.festeh.bro_wear/commands',
+  );
 
   Stream<VadState>? _vadStateStream;
 
   Stream<VadState> get vadStateStream {
     log.d('AudioBridge: setting up vadStateStream');
-    _vadStateStream ??= _eventChannel
-        .receiveBroadcastStream()
-        .map((event) => VadState.fromMap(event as Map<dynamic, dynamic>));
+    _vadStateStream ??= _eventChannel.receiveBroadcastStream().map(
+      (event) => VadState.fromMap(event as Map<dynamic, dynamic>),
+    );
     return _vadStateStream!;
   }
 

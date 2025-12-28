@@ -46,6 +46,17 @@ wear:
     fi
     cd wear && flutter run -d "$device"
 
+# Run wear app on real Samsung watch (SM-* device)
+wear-device:
+    #!/usr/bin/env bash
+    device=$(flutter devices 2>/dev/null | grep "SM " | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
+    if [ -z "$device" ]; then
+        echo "No Samsung watch found. Connect via Wireless debugging."
+        exit 1
+    fi
+    echo "Running on device: $device"
+    cd wear && flutter run -d "$device"
+
 # Build wear debug APK
 wear-build:
     cd wear && flutter build apk --debug
@@ -94,3 +105,39 @@ lint:
 fmt:
     cd wear && dart format lib/
     cd phone && dart format lib/
+
+# ─────────────────────────────────────────────────────────────
+# AI Server
+# ─────────────────────────────────────────────────────────────
+
+# Run AI server
+ai:
+    cd ai && uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000
+
+# Sync AI dependencies
+ai-deps:
+    cd ai && uv sync
+
+# ─────────────────────────────────────────────────────────────
+# Frontend
+# ─────────────────────────────────────────────────────────────
+
+# Run frontend dev server
+fe:
+    cd ai/frontend && npm run dev
+
+# Build frontend for production
+fe-build:
+    cd ai/frontend && npm run build
+
+# Install frontend dependencies
+fe-deps:
+    cd ai/frontend && npm install
+
+# Run both AI server and frontend (requires parallel execution)
+dev:
+    #!/usr/bin/env bash
+    trap 'kill 0' EXIT
+    (cd ai && uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000) &
+    (cd ai/frontend && npm run dev -- --port 5173) &
+    wait
