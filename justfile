@@ -79,6 +79,17 @@ phone:
     fi
     cd phone && flutter run -d "$device"
 
+# Run phone app on real Android device (A065)
+phone-device:
+    #!/usr/bin/env bash
+    device=$(flutter devices 2>/dev/null | grep "A065" | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
+    if [ -z "$device" ]; then
+        echo "No A065 device found. Connect via Wireless debugging."
+        exit 1
+    fi
+    echo "Running on device: $device"
+    cd phone && flutter run -d "$device"
+
 # Build phone APK
 phone-build:
     cd phone && flutter build apk --debug

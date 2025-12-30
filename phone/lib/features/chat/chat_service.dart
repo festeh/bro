@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import '../../core/models/chat_message.dart';
 
-enum ConnectionState { disconnected, connecting, connected, reconnecting }
+enum ChatConnectionState { disconnected, connecting, connected, reconnecting }
 
 class ChatService {
   static const _methodChannel = MethodChannel('com.github.festeh.bro/chat');
@@ -12,15 +12,17 @@ class ChatService {
 
   final _messagesController = StreamController<ChatMessage>.broadcast();
   final _chunksController = StreamController<String>.broadcast();
-  final _connectionController = StreamController<ConnectionState>.broadcast();
+  final _connectionController =
+      StreamController<ChatConnectionState>.broadcast();
 
   StreamSubscription<dynamic>? _eventSubscription;
-  ConnectionState _connectionState = ConnectionState.disconnected;
+  ChatConnectionState _connectionState = ChatConnectionState.disconnected;
 
   Stream<ChatMessage> get messages => _messagesController.stream;
   Stream<String> get chunks => _chunksController.stream;
-  Stream<ConnectionState> get connectionState => _connectionController.stream;
-  ConnectionState get currentState => _connectionState;
+  Stream<ChatConnectionState> get connectionState =>
+      _connectionController.stream;
+  ChatConnectionState get currentState => _connectionState;
 
   ChatService() {
     _listenToEvents();
@@ -65,7 +67,7 @@ class ChatService {
         }
       },
       onError: (error) {
-        _connectionState = ConnectionState.disconnected;
+        _connectionState = ChatConnectionState.disconnected;
         _connectionController.add(_connectionState);
       },
     );
@@ -74,16 +76,16 @@ class ChatService {
   void _updateConnectionState(String? state) {
     switch (state) {
       case 'connected':
-        _connectionState = ConnectionState.connected;
+        _connectionState = ChatConnectionState.connected;
         break;
       case 'connecting':
-        _connectionState = ConnectionState.connecting;
+        _connectionState = ChatConnectionState.connecting;
         break;
       case 'reconnecting':
-        _connectionState = ConnectionState.reconnecting;
+        _connectionState = ChatConnectionState.reconnecting;
         break;
       default:
-        _connectionState = ConnectionState.disconnected;
+        _connectionState = ChatConnectionState.disconnected;
     }
     _connectionController.add(_connectionState);
   }

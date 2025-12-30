@@ -20,9 +20,9 @@ class _ChatPageState extends State<ChatPage> {
 
   StreamSubscription<ChatMessage>? _messagesSubscription;
   StreamSubscription<String>? _chunksSubscription;
-  StreamSubscription<ConnectionState>? _connectionSubscription;
+  StreamSubscription<ChatConnectionState>? _connectionSubscription;
 
-  ConnectionState _connectionState = ConnectionState.disconnected;
+  ChatConnectionState _connectionState = ChatConnectionState.disconnected;
   String _streamingContent = '';
   bool _isStreaming = false;
 
@@ -146,18 +146,18 @@ class _ChatPageState extends State<ChatPage> {
     String tooltip;
 
     switch (_connectionState) {
-      case ConnectionState.connected:
+      case ChatConnectionState.connected:
         color = Tokens.success;
         icon = Icons.cloud_done;
         tooltip = 'Connected';
         break;
-      case ConnectionState.connecting:
-      case ConnectionState.reconnecting:
+      case ChatConnectionState.connecting:
+      case ChatConnectionState.reconnecting:
         color = Tokens.warning;
         icon = Icons.cloud_sync;
         tooltip = 'Connecting...';
         break;
-      case ConnectionState.disconnected:
+      case ChatConnectionState.disconnected:
         color = Tokens.error;
         icon = Icons.cloud_off;
         tooltip = 'Disconnected';
@@ -201,7 +201,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildInputBar() {
-    final canSend = _connectionState == ConnectionState.connected;
+    final canSend = _connectionState == ChatConnectionState.connected;
 
     return Container(
       padding: EdgeInsets.only(
