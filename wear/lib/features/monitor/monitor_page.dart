@@ -141,18 +141,21 @@ class _MonitorPageState extends State<MonitorPage> {
       return _buildPermissionRequest();
     }
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        VadIndicator(status: _state.status),
-        const SizedBox(height: 8),
-        Text(
-          _getStatusText(),
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
-        ),
-        const SizedBox(height: 12),
-        _buildToggleButton(),
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          VadIndicator(status: _state.status),
+          const SizedBox(height: 8),
+          Text(
+            _getStatusText(),
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          _buildToggleButton(),
+        ],
+      ),
     );
   }
 
@@ -160,36 +163,41 @@ class _MonitorPageState extends State<MonitorPage> {
     final isPermanentlyDenied =
         _state.permission == PermissionStatus.permanentlyDenied;
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.mic_off, size: 48, color: Colors.white54),
-          const SizedBox(height: 16),
-          Text(
-            isPermanentlyDenied
-                ? 'Microphone permission denied'
-                : 'Microphone permission required',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: isPermanentlyDenied
-                ? () => _audioBridge.openSettings()
-                : _requestPermission,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mic_off, size: 40, color: Colors.white54),
+            const SizedBox(height: 12),
+            Text(
+              isPermanentlyDenied
+                  ? 'Mic permission denied'
+                  : 'Mic permission required',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: isPermanentlyDenied
+                  ? () => _audioBridge.openSettings()
+                  : _requestPermission,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: Text(
+                isPermanentlyDenied ? 'Settings' : 'Grant',
+                style: const TextStyle(fontSize: 13),
               ),
             ),
-            child: Text(
-              isPermanentlyDenied ? 'Open Settings' : 'Grant Permission',
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
