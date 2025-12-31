@@ -7,11 +7,15 @@ class AudioBridge {
   static const _eventChannel = EventChannel(
     'com.github.festeh.bro_wear/vad_state',
   );
+  static const _pingEventChannel = EventChannel(
+    'com.github.festeh.bro_wear/ping',
+  );
   static const _methodChannel = MethodChannel(
     'com.github.festeh.bro_wear/commands',
   );
 
   Stream<VadState>? _vadStateStream;
+  Stream<DateTime>? _pingStream;
 
   Stream<VadState> get vadStateStream {
     log.d('AudioBridge: setting up vadStateStream');
@@ -19,6 +23,28 @@ class AudioBridge {
       (event) => VadState.fromMap(event as Map<dynamic, dynamic>),
     );
     return _vadStateStream!;
+  }
+
+  Stream<DateTime> get pingStream {
+    log.d('AudioBridge: setting up pingStream');
+    _pingStream ??= _pingEventChannel.receiveBroadcastStream().map((event) {
+      final timestamp = event as int;
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    });
+    return _pingStream!;
+  }
+
+  Future<bool> isPhoneConnected() async {
+    log.d('AudioBridge: isPhoneConnected');
+    try {
+      final result = await _methodChannel.invokeMethod<bool>(
+        'isPhoneConnected',
+      );
+      return result ?? false;
+    } catch (e) {
+      log.d('AudioBridge: isPhoneConnected error=$e');
+      return false;
+    }
   }
 
   Future<PermissionStatus> checkPermission() async {

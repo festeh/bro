@@ -9,26 +9,33 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class ChannelManager(
-    activity: Activity,
+    private val activity: Activity,
     private val messenger: BinaryMessenger
 ) {
     companion object {
         private const val TAG = "ChannelManager"
         private const val EVENT_CHANNEL = "com.github.festeh.bro_wear/vad_state"
+        private const val PING_EVENT_CHANNEL = "com.github.festeh.bro_wear/ping"
         private const val METHOD_CHANNEL = "com.github.festeh.bro_wear/commands"
     }
 
     private val permissionManager = PermissionManager(activity)
     private val vadStateStream = VadStateStream()
-    private val commandHandler = CommandHandler(permissionManager)
+    private val pingStream by lazy { PingStream(activity) }
+    private val commandHandler = CommandHandler(activity, permissionManager)
 
     private var eventChannel: EventChannel? = null
+    private var pingEventChannel: EventChannel? = null
     private var methodChannel: MethodChannel? = null
 
     fun setup() {
         L.d(TAG, "setup start")
         eventChannel = EventChannel(messenger, EVENT_CHANNEL).apply {
             setStreamHandler(vadStateStream)
+        }
+
+        pingEventChannel = EventChannel(messenger, PING_EVENT_CHANNEL).apply {
+            setStreamHandler(pingStream)
         }
 
         methodChannel = MethodChannel(messenger, METHOD_CHANNEL).apply {
@@ -51,8 +58,11 @@ class ChannelManager(
     fun dispose() {
         L.d(TAG, "dispose")
         eventChannel?.setStreamHandler(null)
+        pingEventChannel?.setStreamHandler(null)
         methodChannel?.setMethodCallHandler(null)
+        pingStream.dispose()
         eventChannel = null
+        pingEventChannel = null
         methodChannel = null
     }
 }

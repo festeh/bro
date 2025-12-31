@@ -1,12 +1,20 @@
 package com.github.festeh.bro_wear.bridge
 
+import android.content.Context
 import com.github.festeh.bro_wear.permission.PermissionManager
 import com.github.festeh.bro_wear.service.AudioService
 import com.github.festeh.bro_wear.util.L
+import com.google.android.gms.wearable.Wearable
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class CommandHandler(
+    private val context: Context,
     private val permissionManager: PermissionManager
 ) : MethodChannel.MethodCallHandler {
 
@@ -14,6 +22,7 @@ class CommandHandler(
         private const val TAG = "CommandHandler"
     }
 
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var audioService: AudioService? = null
 
     fun setAudioService(service: AudioService?) {
@@ -51,6 +60,20 @@ class CommandHandler(
                     "isListening" to (audioService?.isListening() ?: false),
                     "hasPermission" to permissionManager.hasRecordPermission()
                 ))
+            }
+            "isPhoneConnected" -> {
+                scope.launch {
+                    try {
+                        val nodes = Wearable.getNodeClient(context)
+                            .connectedNodes
+                            .await()
+                        L.d(TAG, "isPhoneConnected: ${nodes.isNotEmpty()}")
+                        result.success(nodes.isNotEmpty())
+                    } catch (e: Exception) {
+                        L.e(TAG, "Failed to check phone connection: ${e.message}")
+                        result.success(false)
+                    }
+                }
             }
             else -> {
                 L.w(TAG, "Unknown method: ${call.method}")

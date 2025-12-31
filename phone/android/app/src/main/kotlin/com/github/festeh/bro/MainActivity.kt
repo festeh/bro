@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
 import com.github.festeh.bro.bridge.ChatChannelManager
+import com.github.festeh.bro.bridge.PingHandler
 import com.github.festeh.bro.service.AiChatService
 import com.github.festeh.bro.storage.SpeechStorage
 import com.google.android.gms.wearable.Wearable
@@ -28,6 +29,7 @@ class MainActivity : FlutterActivity() {
 
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val storage by lazy { SpeechStorage(this) }
+    private var pingHandler: PingHandler? = null
 
     // Chat service
     private var chatService: AiChatService? = null
@@ -53,6 +55,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Setup ping handler
+        pingHandler = PingHandler(this)
 
         // Setup chat channel manager
         chatChannelManager = ChatChannelManager(flutterEngine.dartExecutor.binaryMessenger)
@@ -112,6 +117,19 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "pingWatch" -> {
+                    mainScope.launch {
+                        try {
+                            val success = pingHandler?.pingWatch() ?: false
+                            Log.d(TAG, "Ping result: $success")
+                            result.success(success)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to ping watch", e)
+                            result.success(false)
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }
@@ -138,6 +156,8 @@ class MainActivity : FlutterActivity() {
             chatServiceBound = false
         }
         chatChannelManager?.dispose()
+        pingHandler?.dispose()
+        pingHandler = null
         super.onDestroy()
     }
 }

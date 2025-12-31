@@ -4,6 +4,7 @@ import '../../app/tokens.dart';
 import '../../core/models/speech_file.dart';
 import 'widgets/sync_indicator.dart';
 import 'widgets/audio_tile.dart';
+import 'widgets/connection_status_bar.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,6 +18,7 @@ class _HomePageState extends State<HomePage> {
 
   List<SpeechFile> _files = [];
   bool _isLoading = false;
+  bool _isPinging = false;
   SyncStatus _syncStatus = SyncStatus.disconnected;
 
   @override
@@ -102,6 +104,22 @@ class _HomePageState extends State<HomePage> {
     await _checkConnection();
   }
 
+  Future<void> _pingWatch() async {
+    if (_isPinging) return;
+
+    setState(() => _isPinging = true);
+
+    try {
+      await _channel.invokeMethod('pingWatch');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to ping watch: ${e.message}');
+    } finally {
+      if (mounted) {
+        setState(() => _isPinging = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -109,10 +127,21 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Bro'),
         actions: [SyncIndicator(status: _syncStatus, onTap: _onRefresh)],
       ),
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: Tokens.primary,
-        child: _buildBody(),
+      body: Column(
+        children: [
+          ConnectionStatusBar(
+            status: _syncStatus,
+            onPing: _pingWatch,
+            isPinging: _isPinging,
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _onRefresh,
+              color: Tokens.primary,
+              child: _buildBody(),
+            ),
+          ),
+        ],
       ),
     );
   }

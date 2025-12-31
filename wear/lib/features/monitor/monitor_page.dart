@@ -4,6 +4,7 @@ import '../../core/platform/audio_bridge.dart';
 import '../../core/platform/vad_state.dart';
 import '../../core/log.dart';
 import 'widgets/vad_indicator.dart';
+import 'widgets/connection_status_bar.dart';
 
 class MonitorPage extends StatefulWidget {
   const MonitorPage({super.key});
@@ -15,15 +16,51 @@ class MonitorPage extends StatefulWidget {
 class _MonitorPageState extends State<MonitorPage> {
   final _audioBridge = AudioBridge();
   StreamSubscription<VadState>? _vadSubscription;
+  StreamSubscription<DateTime>? _pingSubscription;
 
   VadState _state = const VadState();
   bool _isListening = false;
+  PhoneConnectionStatus _phoneStatus = PhoneConnectionStatus.disconnected;
+  DateTime? _lastPingTime;
 
   @override
   void initState() {
     super.initState();
     log.d('MonitorPage: initState');
     _checkPermissionAndSetup();
+    _checkPhoneConnection();
+    _setupPingStream();
+  }
+
+  Future<void> _checkPhoneConnection() async {
+    final connected = await _audioBridge.isPhoneConnected();
+    if (mounted) {
+      setState(() {
+        _phoneStatus = connected
+            ? PhoneConnectionStatus.connected
+            : PhoneConnectionStatus.disconnected;
+      });
+    }
+  }
+
+  void _setupPingStream() {
+    _pingSubscription = _audioBridge.pingStream.listen((pingTime) {
+      log.d('MonitorPage: ping received at $pingTime');
+      if (mounted) {
+        setState(() {
+          _phoneStatus = PhoneConnectionStatus.pingReceived;
+          _lastPingTime = pingTime;
+        });
+        // Reset to connected after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted && _phoneStatus == PhoneConnectionStatus.pingReceived) {
+            setState(() {
+              _phoneStatus = PhoneConnectionStatus.connected;
+            });
+          }
+        });
+      }
+    });
   }
 
   Future<void> _checkPermissionAndSetup() async {
@@ -74,6 +111,7 @@ class _MonitorPageState extends State<MonitorPage> {
   @override
   void dispose() {
     _vadSubscription?.cancel();
+    _pingSubscription?.cancel();
     super.dispose();
   }
 
@@ -81,7 +119,20 @@ class _MonitorPageState extends State<MonitorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(child: _buildContent()),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ConnectionStatusBar(
+                status: _phoneStatus,
+                lastPingTime: _lastPingTime,
+              ),
+            ),
+            Expanded(child: Center(child: _buildContent())),
+          ],
+        ),
+      ),
     );
   }
 
