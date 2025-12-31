@@ -5,6 +5,7 @@ import 'sync_indicator.dart';
 class ConnectionStatusBar extends StatelessWidget {
   final SyncStatus status;
   final VoidCallback? onPing;
+  final VoidCallback? onRefresh;
   final bool isPinging;
   final bool? lastPingSuccess;
 
@@ -12,6 +13,7 @@ class ConnectionStatusBar extends StatelessWidget {
     super.key,
     required this.status,
     this.onPing,
+    this.onRefresh,
     this.isPinging = false,
     this.lastPingSuccess,
   });
@@ -48,6 +50,8 @@ class ConnectionStatusBar extends StatelessWidget {
           ),
           const Spacer(),
           _buildPingButton(),
+          const SizedBox(width: Tokens.spacingSm),
+          _buildRefreshButton(),
         ],
       ),
     );
@@ -114,6 +118,35 @@ class ConnectionStatusBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRefreshButton() {
+    final isRefreshing = status == SyncStatus.syncing;
+
+    return GestureDetector(
+      onTap: isRefreshing ? null : onRefresh,
+      child: Container(
+        padding: const EdgeInsets.all(Tokens.spacingXs),
+        decoration: BoxDecoration(
+          color: Tokens.textTertiary.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        ),
+        child: isRefreshing
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: Tokens.textSecondary,
+                ),
+              )
+            : Icon(
+                Icons.refresh,
+                size: 14,
+                color: Tokens.textSecondary,
+              ),
       ),
     );
   }

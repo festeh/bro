@@ -139,6 +139,7 @@ class _HomePageState extends State<HomePage> {
           ConnectionStatusBar(
             status: _syncStatus,
             onPing: _pingWatch,
+            onRefresh: _onRefresh,
             isPinging: _isPinging,
             lastPingSuccess: _lastPingSuccess,
           ),
