@@ -10,8 +10,8 @@ class VadIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: 120,
-      height: 120,
+      width: 100,
+      height: 100,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: _getBackgroundColor(),
@@ -25,7 +25,7 @@ class VadIndicator extends StatelessWidget {
               ]
             : null,
       ),
-      child: Center(child: Icon(_getIcon(), size: 48, color: Colors.white)),
+      child: Center(child: Icon(_getIcon(), size: 40, color: Colors.white)),
     );
   }
 

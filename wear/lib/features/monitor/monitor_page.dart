@@ -145,12 +145,12 @@ class _MonitorPageState extends State<MonitorPage> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         VadIndicator(status: _state.status),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         Text(
           _getStatusText(),
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         _buildToggleButton(),
       ],
     );
@@ -198,16 +198,17 @@ class _MonitorPageState extends State<MonitorPage> {
     return GestureDetector(
       onTap: _toggleListening,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: _isListening ? Colors.red.shade700 : Colors.blue.shade700,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           _isListening ? 'Stop' : 'Start',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 13,
           ),
         ),
       ),
