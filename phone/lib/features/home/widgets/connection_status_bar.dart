@@ -6,12 +6,14 @@ class ConnectionStatusBar extends StatelessWidget {
   final SyncStatus status;
   final VoidCallback? onPing;
   final bool isPinging;
+  final bool? lastPingSuccess;
 
   const ConnectionStatusBar({
     super.key,
     required this.status,
     this.onPing,
     this.isPinging = false,
+    this.lastPingSuccess,
   });
 
   @override
@@ -67,6 +69,9 @@ class ConnectionStatusBar extends StatelessWidget {
   }
 
   Widget _buildPingButton() {
+    final pingFailed = lastPingSuccess == false;
+    final buttonColor = pingFailed ? Tokens.error : Tokens.primary;
+
     return GestureDetector(
       onTap: isPinging ? null : onPing,
       child: AnimatedContainer(
@@ -76,9 +81,9 @@ class ConnectionStatusBar extends StatelessWidget {
           vertical: Tokens.spacingXs,
         ),
         decoration: BoxDecoration(
-          color: Tokens.primary.withOpacity(isPinging ? 0.3 : 0.2),
+          color: buttonColor.withOpacity(isPinging ? 0.3 : 0.2),
           borderRadius: BorderRadius.circular(Tokens.radiusSm),
-          border: Border.all(color: Tokens.primary.withOpacity(0.5), width: 1),
+          border: Border.all(color: buttonColor.withOpacity(0.5), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -89,16 +94,20 @@ class ConnectionStatusBar extends StatelessWidget {
                 height: 12,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
-                  color: Tokens.primary,
+                  color: buttonColor,
                 ),
               )
             else
-              Icon(Icons.wifi_tethering, size: 12, color: Tokens.primary),
+              Icon(
+                pingFailed ? Icons.wifi_tethering_off : Icons.wifi_tethering,
+                size: 12,
+                color: buttonColor,
+              ),
             const SizedBox(width: 4),
             Text(
-              isPinging ? 'Pinging...' : 'Ping',
+              isPinging ? 'Pinging...' : (pingFailed ? 'Failed' : 'Ping'),
               style: TextStyle(
-                color: Tokens.primary,
+                color: buttonColor,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),

@@ -19,6 +19,7 @@ class _HomePageState extends State<HomePage> {
   List<SpeechFile> _files = [];
   bool _isLoading = false;
   bool _isPinging = false;
+  bool? _lastPingSuccess;
   SyncStatus _syncStatus = SyncStatus.disconnected;
 
   @override
@@ -110,9 +111,15 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isPinging = true);
 
     try {
-      await _channel.invokeMethod('pingWatch');
+      final success = await _channel.invokeMethod<bool>('pingWatch') ?? false;
+      if (mounted) {
+        setState(() => _lastPingSuccess = success);
+      }
     } on PlatformException catch (e) {
       debugPrint('Failed to ping watch: ${e.message}');
+      if (mounted) {
+        setState(() => _lastPingSuccess = false);
+      }
     } finally {
       if (mounted) {
         setState(() => _isPinging = false);
@@ -133,6 +140,7 @@ class _HomePageState extends State<HomePage> {
             status: _syncStatus,
             onPing: _pingWatch,
             isPinging: _isPinging,
+            lastPingSuccess: _lastPingSuccess,
           ),
           Expanded(
             child: RefreshIndicator(
