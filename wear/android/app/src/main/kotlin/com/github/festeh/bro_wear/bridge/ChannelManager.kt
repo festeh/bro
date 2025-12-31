@@ -21,7 +21,7 @@ class ChannelManager(
 
     private val permissionManager = PermissionManager(activity)
     private val vadStateStream = VadStateStream()
-    private val pingStream by lazy { PingStream(activity) }
+    private val pingStream = PingStream()
     private val commandHandler = CommandHandler(activity, permissionManager)
 
     private var eventChannel: EventChannel? = null
