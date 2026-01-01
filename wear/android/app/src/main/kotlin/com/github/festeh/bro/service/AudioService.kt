@@ -144,7 +144,7 @@ class AudioService : Service() {
         preRollBuffer.write(audioFrame)
 
         val result = vadEngine.process(audioFrame)
-        vadStateStream?.emit(result)
+        // Don't emit every frame - causes UI flickering
 
         if (result.isSpeech) {
             handleSpeechDetected(audioFrame)
@@ -160,6 +160,7 @@ class AudioService : Service() {
             if (consecutiveSpeechFrames >= config.triggerFrames) {
                 // Confirmed speech - start recording
                 isInSpeech = true
+                vadStateStream?.emitStatus("recording")
                 wakeLockManager.acquireForWrite()
                 val preRoll = preRollBuffer.flush()
                 speechBuffer.start(preRoll, config.preRollMs)
@@ -176,6 +177,7 @@ class AudioService : Service() {
         if (speechBuffer.isMaxDurationReached()) {
             finalizeSpeechSegment()
             isInSpeech = false
+            vadStateStream?.emitStatus("listening")
             consecutiveSpeechFrames = 0
             wakeLockManager.release()
         }
@@ -193,6 +195,7 @@ class AudioService : Service() {
         if (speechBuffer.isMaxDurationReached()) {
             finalizeSpeechSegment()
             isInSpeech = false
+            vadStateStream?.emitStatus("listening")
             silenceStartTime = 0
             wakeLockManager.release()
             return
@@ -206,6 +209,7 @@ class AudioService : Service() {
         if (silenceDuration >= config.silenceTimeoutMs) {
             finalizeSpeechSegment()
             isInSpeech = false
+            vadStateStream?.emitStatus("listening")
             silenceStartTime = 0
             wakeLockManager.release()
         }
