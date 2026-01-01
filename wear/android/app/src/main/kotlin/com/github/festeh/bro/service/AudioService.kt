@@ -160,7 +160,7 @@ class AudioService : Service() {
             if (consecutiveSpeechFrames >= config.triggerFrames) {
                 // Confirmed speech - start recording
                 isInSpeech = true
-                vadStateStream?.emitStatus("recording")
+                vadStateStream?.emitStatus("speech")
                 wakeLockManager.acquireForWrite()
                 val preRoll = preRollBuffer.flush()
                 speechBuffer.start(preRoll, config.preRollMs)
