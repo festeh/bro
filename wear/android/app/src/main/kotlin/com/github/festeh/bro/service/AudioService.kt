@@ -143,7 +143,7 @@ class AudioService : Service() {
         if (result.isSpeech) {
             handleSpeechDetected(audioFrame)
         } else {
-            handleSilenceDetected()
+            handleSilenceDetected(audioFrame)
         }
     }
 
@@ -153,7 +153,7 @@ class AudioService : Service() {
             isInSpeech = true
             wakeLockManager.acquireForWrite()
             val preRoll = preRollBuffer.flush()
-            speechBuffer.start(preRoll)
+            speechBuffer.start(preRoll, config.preRollMs)
         }
 
         speechBuffer.append(audioFrame)
@@ -167,8 +167,20 @@ class AudioService : Service() {
         }
     }
 
-    private fun handleSilenceDetected() {
+    private fun handleSilenceDetected(audioFrame: ShortArray) {
         if (!isInSpeech) return
+
+        // Keep appending audio during silence timeout - this audio might still contain speech
+        speechBuffer.append(audioFrame)
+
+        // Check max duration first
+        if (speechBuffer.isMaxDurationReached()) {
+            finalizeSpeechSegment()
+            isInSpeech = false
+            silenceStartTime = 0
+            wakeLockManager.release()
+            return
+        }
 
         if (silenceStartTime == 0L) {
             silenceStartTime = System.currentTimeMillis()

@@ -33,3 +33,5 @@ dependencyResolutionManagement {
 }
 
 include(":app")
+include(":opus")
+project(":opus").projectDir = file("../../shared/opus")

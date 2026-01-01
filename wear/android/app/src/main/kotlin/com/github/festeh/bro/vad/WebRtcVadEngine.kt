@@ -32,7 +32,7 @@ class WebRtcVadEngine : VadEngine {
         vad = Vad.builder()
             .setSampleRate(sampleRate)
             .setFrameSize(frameSize)
-            .setMode(Mode.VERY_AGGRESSIVE)
+            .setMode(Mode.LOW_BITRATE)  // Less aggressive - keeps speech segments together
             .build()
 
         running = true

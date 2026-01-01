@@ -142,11 +142,7 @@ class ConnectionStatusBar extends StatelessWidget {
                   color: Tokens.textSecondary,
                 ),
               )
-            : Icon(
-                Icons.refresh,
-                size: 14,
-                color: Tokens.textSecondary,
-              ),
+            : Icon(Icons.refresh, size: 14, color: Tokens.textSecondary),
       ),
     );
   }

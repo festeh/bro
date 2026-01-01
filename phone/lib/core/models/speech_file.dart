@@ -1,29 +1,30 @@
-class SpeechFile {
-  final String path;
+class SpeechSegment {
   final String id;
   final DateTime timestamp;
-  final int sizeBytes;
+  final Duration duration;
+  final List<double> waveform;
 
-  const SpeechFile({
-    required this.path,
+  const SpeechSegment({
     required this.id,
     required this.timestamp,
-    required this.sizeBytes,
+    required this.duration,
+    required this.waveform,
   });
 
-  factory SpeechFile.fromMap(Map<String, dynamic> map) {
-    return SpeechFile(
-      path: map['path'] as String,
+  factory SpeechSegment.fromMap(Map<String, dynamic> map) {
+    return SpeechSegment(
       id: map['id'] as String,
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
-      sizeBytes: map['sizeBytes'] as int,
+      duration: Duration(milliseconds: map['durationMs'] as int),
+      waveform: (map['waveform'] as List<dynamic>)
+          .map((e) => (e as num).toDouble())
+          .toList(),
     );
   }
 
-  String get formattedSize {
-    if (sizeBytes < 1024) return '$sizeBytes B';
-    if (sizeBytes < 1024 * 1024)
-      return '${(sizeBytes / 1024).toStringAsFixed(1)} KB';
-    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String get formattedDuration {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }

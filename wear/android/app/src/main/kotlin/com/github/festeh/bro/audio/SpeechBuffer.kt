@@ -13,11 +13,13 @@ class SpeechBuffer(
     val size: Int get() = buffer.size
     val durationMs: Int get() = (buffer.size * 1000) / sampleRate
 
-    fun start(preRoll: ShortArray) {
+    @Synchronized
+    fun start(preRoll: ShortArray, preRollMs: Int) {
         buffer = preRoll.toMutableList()
-        startTime = System.currentTimeMillis()
+        startTime = System.currentTimeMillis() - preRollMs
     }
 
+    @Synchronized
     fun append(samples: ShortArray): Boolean {
         val remaining = maxSamples - buffer.size
         if (remaining <= 0) return false
@@ -30,8 +32,10 @@ class SpeechBuffer(
         return buffer.size < maxSamples
     }
 
+    @Synchronized
     fun isMaxDurationReached(): Boolean = buffer.size >= maxSamples
 
+    @Synchronized
     fun toSegment(): SpeechSegment {
         return SpeechSegment(
             id = UUID.randomUUID(),
@@ -42,6 +46,7 @@ class SpeechBuffer(
         )
     }
 
+    @Synchronized
     fun clear() {
         buffer.clear()
         startTime = 0

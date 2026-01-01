@@ -186,7 +186,10 @@ class _MonitorPageState extends State<MonitorPage> {
                   : _requestPermission,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

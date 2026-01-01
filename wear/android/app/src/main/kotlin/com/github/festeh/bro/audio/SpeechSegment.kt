@@ -10,7 +10,8 @@ data class SpeechSegment(
     val data: ShortArray,
     val opusData: ByteArray? = null
 ) {
-    val durationMs: Long get() = endTime - startTime
+    // Use sample-based duration for accuracy (not wall-clock time)
+    val durationMs: Long get() = (data.size.toLong() * 1000) / sampleRate
 
     fun toPcmBytes(): ByteArray {
         val bytes = ByteArray(data.size * 2)

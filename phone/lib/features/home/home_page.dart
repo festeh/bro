@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/tokens.dart';
 import '../../core/models/speech_file.dart';
+import '../settings/settings_page.dart';
 import 'widgets/sync_indicator.dart';
 import 'widgets/audio_tile.dart';
 import 'widgets/connection_status_bar.dart';
@@ -16,7 +17,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _channel = MethodChannel('com.github.festeh.bro/storage');
 
-  List<SpeechFile> _files = [];
+  List<SpeechSegment> _segments = [];
   bool _isLoading = false;
   bool _isPinging = false;
   bool? _lastPingSuccess;
@@ -25,22 +26,23 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _loadFiles();
+    _loadSegments();
     _checkConnection();
   }
 
-  Future<void> _loadFiles() async {
+  Future<void> _loadSegments() async {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _channel.invokeMethod('listFiles');
-      final List<dynamic> filesList = result as List<dynamic>;
+      final result = await _channel.invokeMethod('listSegments');
+      final List<dynamic> segmentsList = result as List<dynamic>;
 
       setState(() {
-        _files =
-            filesList
+        _segments =
+            segmentsList
                 .map(
-                  (item) => SpeechFile.fromMap(Map<String, dynamic>.from(item)),
+                  (item) =>
+                      SpeechSegment.fromMap(Map<String, dynamic>.from(item)),
                 )
                 .toList()
               ..sort(
@@ -48,7 +50,7 @@ class _HomePageState extends State<HomePage> {
               ); // Newest first
       });
     } on PlatformException catch (e) {
-      debugPrint('Failed to load files: ${e.message}');
+      debugPrint('Failed to load segments: ${e.message}');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -68,7 +70,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _deleteFile(SpeechFile file) async {
+  Future<void> _deleteSegment(SpeechSegment segment) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -89,19 +91,19 @@ class _HomePageState extends State<HomePage> {
 
     if (confirm == true) {
       try {
-        await _channel.invokeMethod('deleteFile', {'path': file.path});
+        await _channel.invokeMethod('deleteSegment', {'id': segment.id});
         setState(() {
-          _files.removeWhere((f) => f.id == file.id);
+          _segments.removeWhere((s) => s.id == segment.id);
         });
       } on PlatformException catch (e) {
-        debugPrint('Failed to delete file: ${e.message}');
+        debugPrint('Failed to delete segment: ${e.message}');
       }
     }
   }
 
   Future<void> _onRefresh() async {
     setState(() => _syncStatus = SyncStatus.syncing);
-    await _loadFiles();
+    await _loadSegments();
     await _checkConnection();
   }
 
@@ -127,12 +129,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _openSettings() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsPage()),
+    );
+    if (result == true) {
+      _loadSegments();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bro'),
-        actions: [SyncIndicator(status: _syncStatus, onTap: _onRefresh)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _openSettings,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -156,13 +173,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody() {
-    if (_isLoading && _files.isEmpty) {
+    if (_isLoading && _segments.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Tokens.primary),
       );
     }
 
-    if (_files.isEmpty) {
+    if (_segments.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -187,10 +204,14 @@ class _HomePageState extends State<HomePage> {
 
     return ListView.builder(
       padding: const EdgeInsets.only(top: Tokens.spacingSm),
-      itemCount: _files.length,
+      itemCount: _segments.length,
       itemBuilder: (context, index) {
-        final file = _files[index];
-        return AudioTile(file: file, onDelete: () => _deleteFile(file));
+        final segment = _segments[index];
+        return AudioTile(
+          key: ValueKey(segment.id),
+          segment: segment,
+          onDelete: () => _deleteSegment(segment),
+        );
       },
     );
   }

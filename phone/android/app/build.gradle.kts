@@ -44,6 +44,8 @@ flutter {
 }
 
 dependencies {
+    // Opus encoding/decoding - theeasiestway/android-opus-codec
+    implementation(project(":opus"))
     // Wear DataLayer API for receiving speech from watch
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     // Coroutines for Play Services Tasks

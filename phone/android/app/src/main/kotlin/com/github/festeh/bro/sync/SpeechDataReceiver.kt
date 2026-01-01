@@ -1,7 +1,8 @@
 package com.github.festeh.bro.sync
 
 import android.util.Log
-import com.github.festeh.bro.storage.SpeechStorage
+import com.github.festeh.bro.codec.OpusDecoder
+import com.github.festeh.bro.storage.SegmentDatabase
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
@@ -14,10 +15,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
+import kotlin.math.abs
 
 /**
  * Receives speech segments from the watch via Wear DataLayer API.
- * Saves them to local storage and deletes the DataItem to free quota.
+ * Saves raw Opus data to SQLite and deletes the DataItem to free quota.
  */
 class SpeechDataReceiver : WearableListenerService() {
 
@@ -26,14 +28,17 @@ class SpeechDataReceiver : WearableListenerService() {
         private const val PATH_PREFIX = "/bro/speech/"
         private const val KEY_AUDIO = "audio"
         private const val KEY_START_TIME = "startTime"
-        private const val KEY_END_TIME = "endTime"
+        private const val KEY_DURATION_MS = "durationMs"
     }
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
-    private val storage by lazy { SpeechStorage(this) }
+    private val database by lazy { SegmentDatabase(this) }
     private val dataClient: DataClient by lazy { Wearable.getDataClient(this) }
+    private val opusDecoder by lazy {
+        OpusDecoder().also { it.init() }
+    }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         Log.d(TAG, "onDataChanged: ${dataEvents.count} events")
@@ -63,17 +68,31 @@ class SpeechDataReceiver : WearableListenerService() {
             return
         }
 
+        // Dedup check - skip if already processed
+        if (database.exists(segmentId)) {
+            Log.d(TAG, "Skipping already-processed segment $segmentId")
+            // Still delete the DataItem to free quota
+            serviceScope.launch {
+                try {
+                    dataClient.deleteDataItems(uri).await()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to delete duplicate DataItem", e)
+                }
+            }
+            return
+        }
+
         val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
         val asset = dataMap.getAsset(KEY_AUDIO)
         val startTime = dataMap.getLong(KEY_START_TIME)
-        val endTime = dataMap.getLong(KEY_END_TIME)
+        val durationMs = dataMap.getLong(KEY_DURATION_MS)
 
         if (asset == null) {
             Log.e(TAG, "No audio asset in segment $segmentId")
             return
         }
 
-        Log.d(TAG, "Processing segment $segmentId (${endTime - startTime}ms)")
+        Log.d(TAG, "Processing segment $segmentId (${durationMs}ms)")
 
         serviceScope.launch {
             try {
@@ -84,17 +103,28 @@ class SpeechDataReceiver : WearableListenerService() {
                     return@launch
                 }
 
-                val opusData = fd.inputStream.use { it.readBytes() }
-                Log.d(TAG, "Received ${opusData.size} bytes for segment $segmentId")
+                val rawOpusData = fd.inputStream.use { it.readBytes() }
+                Log.d(TAG, "Received ${rawOpusData.size} bytes for segment $segmentId")
 
-                // Save to storage
-                val file = storage.save(segmentId, opusData, startTime, endTime)
-                if (file != null) {
-                    Log.d(TAG, "Saved segment $segmentId to ${file.name}")
+                // Decode to PCM for waveform extraction
+                val pcmData = opusDecoder.decodeRawFrames(rawOpusData)
+                Log.d(TAG, "Decoded to ${pcmData.size} PCM samples")
+
+                // Extract waveform for visualization
+                val waveform = extractWaveform(pcmData, 50)
+                Log.d(TAG, "Extracted waveform: ${waveform.size} samples")
+
+                // Save raw Opus to database
+                val saved = database.insert(segmentId, startTime, durationMs, waveform, rawOpusData)
+
+                if (saved) {
+                    Log.d(TAG, "Saved segment $segmentId to database")
 
                     // Delete DataItem to free quota
                     dataClient.deleteDataItems(uri).await()
                     Log.d(TAG, "Deleted DataItem for segment $segmentId")
+                } else {
+                    Log.e(TAG, "Failed to save segment $segmentId (possible duplicate)")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to process segment $segmentId", e)
@@ -102,7 +132,38 @@ class SpeechDataReceiver : WearableListenerService() {
         }
     }
 
+    /**
+     * Extract waveform amplitudes from PCM data.
+     * Returns normalized values (0.0 to 1.0) for visualization.
+     */
+    private fun extractWaveform(pcmData: ShortArray, numSamples: Int): DoubleArray {
+        if (pcmData.isEmpty()) return DoubleArray(0)
+
+        val samplesPerBucket = pcmData.size / numSamples
+        if (samplesPerBucket == 0) {
+            // Less samples than buckets - just normalize what we have
+            return pcmData.map { abs(it.toDouble()) / Short.MAX_VALUE }.toDoubleArray()
+        }
+
+        val waveform = DoubleArray(numSamples)
+        for (i in 0 until numSamples) {
+            val start = i * samplesPerBucket
+            val end = minOf(start + samplesPerBucket, pcmData.size)
+
+            // Calculate RMS for this bucket
+            var sum = 0.0
+            for (j in start until end) {
+                val sample = pcmData[j].toDouble() / Short.MAX_VALUE
+                sum += sample * sample
+            }
+            waveform[i] = kotlin.math.sqrt(sum / (end - start))
+        }
+
+        return waveform
+    }
+
     override fun onDestroy() {
+        opusDecoder.release()
         serviceJob.cancel()
         super.onDestroy()
     }

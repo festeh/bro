@@ -6,10 +6,12 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import com.github.festeh.bro.audio.PcmPlayer
 import com.github.festeh.bro.bridge.ChatChannelManager
 import com.github.festeh.bro.bridge.PingHandler
+import com.github.festeh.bro.codec.OpusDecoder
 import com.github.festeh.bro.service.AiChatService
-import com.github.festeh.bro.storage.SpeechStorage
+import com.github.festeh.bro.storage.SegmentDatabase
 import com.google.android.gms.wearable.Wearable
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,7 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.io.File
+import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -28,8 +30,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val storage by lazy { SpeechStorage(this) }
+    private val database by lazy { SegmentDatabase(this) }
     private var pingHandler: PingHandler? = null
+
+    // Audio playback
+    private val opusDecoder by lazy { OpusDecoder().also { it.init() } }
+    private val pcmPlayer by lazy { PcmPlayer() }
 
     // Chat service
     private var chatService: AiChatService? = null
@@ -71,36 +77,97 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
-                "listFiles" -> {
+                "listSegments" -> {
                     mainScope.launch {
                         try {
-                            val files = storage.listAll()
-                            val filesList = files.map { file ->
+                            val segments = database.getAll()
+                            val segmentsList = segments.map { segment ->
                                 mapOf(
-                                    "path" to file.absolutePath,
-                                    "id" to extractId(file),
-                                    "timestamp" to extractTimestamp(file),
-                                    "sizeBytes" to file.length()
+                                    "id" to segment.id,
+                                    "timestamp" to segment.timestamp,
+                                    "durationMs" to segment.durationMs,
+                                    "waveform" to segment.waveform
                                 )
                             }
-                            result.success(filesList)
+                            result.success(segmentsList)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to list files", e)
+                            Log.e(TAG, "Failed to list segments", e)
                             result.error("LIST_ERROR", e.message, null)
                         }
                     }
                 }
 
-                "deleteFile" -> {
-                    val path = call.argument<String>("path")
-                    if (path == null) {
-                        result.error("INVALID_ARG", "Path is required", null)
+                "playAudio" -> {
+                    val id = call.argument<String>("id")
+                    if (id == null) {
+                        result.error("INVALID_ARG", "ID is required", null)
                         return@setMethodCallHandler
                     }
 
-                    val file = File(path)
-                    val success = storage.delete(file)
-                    result.success(success)
+                    mainScope.launch {
+                        try {
+                            val uuid = UUID.fromString(id)
+                            val rawOpusData = database.getAudio(uuid)
+
+                            if (rawOpusData == null) {
+                                result.error("NOT_FOUND", "Segment not found", null)
+                                return@launch
+                            }
+
+                            // Decode Opus to PCM
+                            val pcmData = opusDecoder.decodeRawFrames(rawOpusData)
+                            Log.d(TAG, "Decoded ${rawOpusData.size} bytes to ${pcmData.size} PCM samples")
+
+                            // Play via AudioTrack
+                            pcmPlayer.play(pcmData)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to play audio", e)
+                            result.error("AUDIO_ERROR", e.message, null)
+                        }
+                    }
+                }
+
+                "stopAudio" -> {
+                    pcmPlayer.stop()
+                    result.success(true)
+                }
+
+                "pauseAudio" -> {
+                    pcmPlayer.pause()
+                    result.success(true)
+                }
+
+                "resumeAudio" -> {
+                    pcmPlayer.resume()
+                    result.success(true)
+                }
+
+                "getPlaybackPosition" -> {
+                    result.success(pcmPlayer.getPositionMs())
+                }
+
+                "isPlaying" -> {
+                    result.success(pcmPlayer.isPlaying())
+                }
+
+                "deleteSegment" -> {
+                    val id = call.argument<String>("id")
+                    if (id == null) {
+                        result.error("INVALID_ARG", "ID is required", null)
+                        return@setMethodCallHandler
+                    }
+
+                    mainScope.launch {
+                        try {
+                            val uuid = UUID.fromString(id)
+                            val success = database.delete(uuid)
+                            result.success(success)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to delete segment", e)
+                            result.error("DELETE_ERROR", e.message, null)
+                        }
+                    }
                 }
 
                 "isWatchConnected" -> {
@@ -130,27 +197,28 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "clearAll" -> {
+                    mainScope.launch {
+                        try {
+                            val deleted = database.clearAll()
+                            Log.d(TAG, "Cleared $deleted segments")
+                            result.success(deleted)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to clear all", e)
+                            result.error("CLEAR_ERROR", e.message, null)
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun extractId(file: File): String {
-        // Filename format: {timestamp}_{uuid}.opus
-        val name = file.nameWithoutExtension
-        val parts = name.split("_", limit = 2)
-        return if (parts.size > 1) parts[1] else name
-    }
-
-    private fun extractTimestamp(file: File): Long {
-        // Filename format: {timestamp}_{uuid}.opus
-        val name = file.nameWithoutExtension
-        val parts = name.split("_", limit = 2)
-        return parts.firstOrNull()?.toLongOrNull() ?: file.lastModified()
-    }
-
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        pcmPlayer.release()
+        opusDecoder.release()
         if (chatServiceBound) {
             unbindService(chatServiceConnection)
             chatServiceBound = false
