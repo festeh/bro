@@ -56,6 +56,7 @@ class AudioService : Service() {
     private var isInSpeech = false
     private var silenceStartTime: Long = 0
     private var listening = false
+    private var consecutiveSpeechFrames = 0
 
     inner class LocalBinder : Binder() {
         fun getService(): AudioService = this@AudioService
@@ -148,12 +149,19 @@ class AudioService : Service() {
     }
 
     private fun handleSpeechDetected(audioFrame: ShortArray) {
+        consecutiveSpeechFrames++
+
         if (!isInSpeech) {
-            // Transition to speech: flush pre-roll
-            isInSpeech = true
-            wakeLockManager.acquireForWrite()
-            val preRoll = preRollBuffer.flush()
-            speechBuffer.start(preRoll, config.preRollMs)
+            if (consecutiveSpeechFrames >= config.triggerFrames) {
+                // Confirmed speech - start recording
+                isInSpeech = true
+                wakeLockManager.acquireForWrite()
+                val preRoll = preRollBuffer.flush()
+                speechBuffer.start(preRoll, config.preRollMs)
+                speechBuffer.append(audioFrame)
+            }
+            // else: not enough consecutive frames yet, keep waiting
+            return
         }
 
         speechBuffer.append(audioFrame)
@@ -163,11 +171,14 @@ class AudioService : Service() {
         if (speechBuffer.isMaxDurationReached()) {
             finalizeSpeechSegment()
             isInSpeech = false
+            consecutiveSpeechFrames = 0
             wakeLockManager.release()
         }
     }
 
     private fun handleSilenceDetected(audioFrame: ShortArray) {
+        consecutiveSpeechFrames = 0  // Reset trigger counter
+
         if (!isInSpeech) return
 
         // Keep appending audio during silence timeout - this audio might still contain speech
@@ -197,13 +208,6 @@ class AudioService : Service() {
 
     private fun finalizeSpeechSegment() {
         val segment = speechBuffer.toSegment()
-
-        // Discard if too short
-        if (segment.durationMs < config.minSpeechMs) {
-            L.d(TAG, "Segment too short: ${segment.durationMs}ms, discarding")
-            speechBuffer.clear()
-            return
-        }
 
         // Encode to Opus
         val opusData = try {
