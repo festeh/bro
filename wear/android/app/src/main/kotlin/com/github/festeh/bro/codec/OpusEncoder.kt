@@ -57,11 +57,11 @@ class OpusEncoder {
         while (offset + frameSamples <= pcmSamples.size) {
             val frame = pcmSamples.copyOfRange(offset, offset + frameSamples)
 
-            // Encode returns ShortArray, convert to ByteArray
-            val encodedShorts = opus!!.encode(frame, frameSize)
-            if (encodedShorts != null && encodedShorts.isNotEmpty()) {
-                val encodedBytes = opus!!.convert(encodedShorts)
-                if (encodedBytes != null) {
+            // Convert PCM shorts to bytes, then encode directly to bytes
+            val pcmBytes = opus!!.convert(frame)
+            if (pcmBytes != null) {
+                val encodedBytes = opus!!.encode(pcmBytes, frameSize)
+                if (encodedBytes != null && encodedBytes.isNotEmpty()) {
                     // Write frame length (2 bytes, little-endian) then frame data
                     output.write(encodedBytes.size and 0xFF)
                     output.write((encodedBytes.size shr 8) and 0xFF)
@@ -79,10 +79,10 @@ class OpusEncoder {
             System.arraycopy(pcmSamples, offset, frame, 0, remaining)
             // Rest is already zero-padded
 
-            val encodedShorts = opus!!.encode(frame, frameSize)
-            if (encodedShorts != null && encodedShorts.isNotEmpty()) {
-                val encodedBytes = opus!!.convert(encodedShorts)
-                if (encodedBytes != null) {
+            val pcmBytes = opus!!.convert(frame)
+            if (pcmBytes != null) {
+                val encodedBytes = opus!!.encode(pcmBytes, frameSize)
+                if (encodedBytes != null && encodedBytes.isNotEmpty()) {
                     output.write(encodedBytes.size and 0xFF)
                     output.write((encodedBytes.size shr 8) and 0xFF)
                     output.write(encodedBytes)
