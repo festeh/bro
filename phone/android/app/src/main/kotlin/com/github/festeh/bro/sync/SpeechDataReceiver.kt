@@ -36,9 +36,6 @@ class SpeechDataReceiver : WearableListenerService() {
 
     private val database by lazy { SegmentDatabase(this) }
     private val dataClient: DataClient by lazy { Wearable.getDataClient(this) }
-    private val opusDecoder by lazy {
-        OpusDecoder().also { it.init() }
-    }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         Log.d(TAG, "onDataChanged: ${dataEvents.count} events")
@@ -107,7 +104,8 @@ class SpeechDataReceiver : WearableListenerService() {
                 Log.d(TAG, "Received ${rawOpusData.size} bytes for segment $segmentId")
 
                 // Decode to PCM for waveform extraction
-                val pcmData = opusDecoder.decodeRawFrames(rawOpusData)
+                OpusDecoder.init()  // Ensure initialized (idempotent)
+                val pcmData = OpusDecoder.decodeRawFrames(rawOpusData)
                 Log.d(TAG, "Decoded to ${pcmData.size} PCM samples")
 
                 // Extract waveform for visualization
@@ -163,7 +161,6 @@ class SpeechDataReceiver : WearableListenerService() {
     }
 
     override fun onDestroy() {
-        opusDecoder.release()
         serviceJob.cancel()
         super.onDestroy()
     }

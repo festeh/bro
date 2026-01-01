@@ -7,13 +7,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Decodes Opus audio to PCM.
- * Can decode both raw Opus frames (with 2-byte length prefix) and OGG/Opus containers.
+ * Singleton Opus decoder.
+ * MUST be singleton because native lib uses a global codec instance.
  */
-class OpusDecoder {
-    companion object {
-        private const val TAG = "OpusDecoder"
-    }
+object OpusDecoder {
+    private const val TAG = "OpusDecoder"
 
     private var opus: Opus? = null
     private var initialized = false
@@ -22,6 +20,7 @@ class OpusDecoder {
     private val frameSize = Constants.FrameSize._320()
     private val sampleRate = Constants.SampleRate._16000()
 
+    @Synchronized
     fun init() {
         if (initialized) return
 
@@ -43,6 +42,7 @@ class OpusDecoder {
      * @param rawOpusData Raw Opus frames with 2-byte little-endian length prefix
      * @return ShortArray of PCM 16-bit mono samples at 16kHz
      */
+    @Synchronized
     fun decodeRawFrames(rawOpusData: ByteArray): ShortArray {
         if (!initialized || opus == null) {
             throw IllegalStateException("OpusDecoder not initialized. Call init() first.")
@@ -89,6 +89,7 @@ class OpusDecoder {
      * @param opusFrame Single Opus frame (without length prefix)
      * @return ShortArray of PCM samples, or null if decoding failed
      */
+    @Synchronized
     fun decodeFrame(opusFrame: ByteArray): ShortArray? {
         if (!initialized || opus == null) {
             throw IllegalStateException("OpusDecoder not initialized. Call init() first.")
@@ -122,12 +123,6 @@ class OpusDecoder {
         return bytes
     }
 
-    fun release() {
-        if (initialized) {
-            opus?.decoderRelease()
-            opus = null
-            initialized = false
-            Log.d(TAG, "Opus decoder released")
-        }
-    }
+    // Note: We don't release the decoder since it's a singleton
+    // and the native lib uses a global codec anyway
 }

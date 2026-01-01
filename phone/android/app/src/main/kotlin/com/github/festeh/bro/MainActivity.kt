@@ -34,7 +34,6 @@ class MainActivity : FlutterActivity() {
     private var pingHandler: PingHandler? = null
 
     // Audio playback
-    private val opusDecoder by lazy { OpusDecoder().also { it.init() } }
     private val pcmPlayer by lazy { PcmPlayer() }
 
     // Chat service
@@ -61,6 +60,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Initialize singleton Opus decoder
+        OpusDecoder.init()
 
         // Setup ping handler
         pingHandler = PingHandler(this)
@@ -115,7 +117,7 @@ class MainActivity : FlutterActivity() {
                             }
 
                             // Decode Opus to PCM
-                            val pcmData = opusDecoder.decodeRawFrames(rawOpusData)
+                            val pcmData = OpusDecoder.decodeRawFrames(rawOpusData)
                             Log.d(TAG, "Decoded ${rawOpusData.size} bytes to ${pcmData.size} PCM samples")
 
                             // Play via AudioTrack
@@ -218,7 +220,6 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
         pcmPlayer.release()
-        opusDecoder.release()
         if (chatServiceBound) {
             unbindService(chatServiceConnection)
             chatServiceBound = false
