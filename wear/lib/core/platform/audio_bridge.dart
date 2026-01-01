@@ -5,13 +5,13 @@ import '../log.dart';
 
 class AudioBridge {
   static const _eventChannel = EventChannel(
-    'com.github.festeh.bro_wear/vad_state',
+    'com.github.festeh.bro/vad_state',
   );
   static const _pingEventChannel = EventChannel(
-    'com.github.festeh.bro_wear/ping',
+    'com.github.festeh.bro/ping',
   );
   static const _methodChannel = MethodChannel(
-    'com.github.festeh.bro_wear/commands',
+    'com.github.festeh.bro/commands',
   );
 
   Stream<VadState>? _vadStateStream;

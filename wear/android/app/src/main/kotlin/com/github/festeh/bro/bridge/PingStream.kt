@@ -1,9 +1,9 @@
-package com.github.festeh.bro_wear.bridge
+package com.github.festeh.bro.bridge
 
 import android.os.Handler
 import android.os.Looper
-import com.github.festeh.bro_wear.service.PingListenerService
-import com.github.festeh.bro_wear.util.L
+import com.github.festeh.bro.service.PingListenerService
+import com.github.festeh.bro.util.L
 import io.flutter.plugin.common.EventChannel
 
 class PingStream : EventChannel.StreamHandler {

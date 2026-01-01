@@ -1,9 +1,9 @@
-package com.github.festeh.bro_wear.bridge
+package com.github.festeh.bro.bridge
 
 import android.content.Context
-import com.github.festeh.bro_wear.permission.PermissionManager
-import com.github.festeh.bro_wear.service.AudioService
-import com.github.festeh.bro_wear.util.L
+import com.github.festeh.bro.permission.PermissionManager
+import com.github.festeh.bro.service.AudioService
+import com.github.festeh.bro.util.L
 import com.google.android.gms.wearable.Wearable
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel

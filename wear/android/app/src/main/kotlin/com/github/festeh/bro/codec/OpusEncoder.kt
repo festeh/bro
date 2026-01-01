@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.codec
+package com.github.festeh.bro.codec
 
 import com.score.rahasak.utils.OpusEncoder as RahasakOpusEncoder
 import java.io.ByteArrayOutputStream

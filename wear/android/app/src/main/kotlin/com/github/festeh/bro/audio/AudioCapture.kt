@@ -1,10 +1,10 @@
-package com.github.festeh.bro_wear.audio
+package com.github.festeh.bro.audio
 
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import com.github.festeh.bro_wear.vad.VadConfig
+import com.github.festeh.bro.vad.VadConfig
 
 class AudioCapture(
     private val config: VadConfig,

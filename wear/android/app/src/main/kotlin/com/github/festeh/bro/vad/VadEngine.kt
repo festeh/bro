@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.vad
+package com.github.festeh.bro.vad
 
 interface VadEngine {
     fun start(config: VadConfig)

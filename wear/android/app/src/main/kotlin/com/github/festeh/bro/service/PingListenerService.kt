@@ -1,6 +1,6 @@
-package com.github.festeh.bro_wear.service
+package com.github.festeh.bro.service
 
-import com.github.festeh.bro_wear.util.L
+import com.github.festeh.bro.util.L
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService

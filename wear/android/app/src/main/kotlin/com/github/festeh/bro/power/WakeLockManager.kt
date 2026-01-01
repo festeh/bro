@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.power
+package com.github.festeh.bro.power
 
 import android.content.Context
 import android.os.PowerManager

@@ -1,8 +1,8 @@
-package com.github.festeh.bro_wear.bridge
+package com.github.festeh.bro.bridge
 
 import android.os.Handler
 import android.os.Looper
-import com.github.festeh.bro_wear.vad.VadResult
+import com.github.festeh.bro.vad.VadResult
 import io.flutter.plugin.common.EventChannel
 
 class VadStateStream : EventChannel.StreamHandler {

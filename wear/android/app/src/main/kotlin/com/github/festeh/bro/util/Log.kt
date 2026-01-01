@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.util
+package com.github.festeh.bro.util
 
 import android.util.Log as AndroidLog
 

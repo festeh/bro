@@ -1,9 +1,9 @@
-package com.github.festeh.bro_wear.bridge
+package com.github.festeh.bro.bridge
 
 import android.app.Activity
-import com.github.festeh.bro_wear.permission.PermissionManager
-import com.github.festeh.bro_wear.service.AudioService
-import com.github.festeh.bro_wear.util.L
+import com.github.festeh.bro.permission.PermissionManager
+import com.github.festeh.bro.service.AudioService
+import com.github.festeh.bro.util.L
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -14,9 +14,9 @@ class ChannelManager(
 ) {
     companion object {
         private const val TAG = "ChannelManager"
-        private const val EVENT_CHANNEL = "com.github.festeh.bro_wear/vad_state"
-        private const val PING_EVENT_CHANNEL = "com.github.festeh.bro_wear/ping"
-        private const val METHOD_CHANNEL = "com.github.festeh.bro_wear/commands"
+        private const val EVENT_CHANNEL = "com.github.festeh.bro/vad_state"
+        private const val PING_EVENT_CHANNEL = "com.github.festeh.bro/ping"
+        private const val METHOD_CHANNEL = "com.github.festeh.bro/commands"
     }
 
     private val permissionManager = PermissionManager(activity)

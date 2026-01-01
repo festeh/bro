@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.vad
+package com.github.festeh.bro.vad
 
 data class VadResult(
     val isSpeech: Boolean,

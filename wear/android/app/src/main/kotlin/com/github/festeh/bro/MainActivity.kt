@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear
+package com.github.festeh.bro
 
 import android.Manifest
 import android.content.ComponentName
@@ -13,9 +13,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import com.github.festeh.bro_wear.bridge.ChannelManager
-import com.github.festeh.bro_wear.service.AudioService
-import com.github.festeh.bro_wear.util.L
+import com.github.festeh.bro.bridge.ChannelManager
+import com.github.festeh.bro.service.AudioService
+import com.github.festeh.bro.util.L
 
 class MainActivity : FlutterActivity() {
     companion object {

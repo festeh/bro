@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.vad
+package com.github.festeh.bro.vad
 
 import com.konovalov.vad.webrtc.Vad
 import com.konovalov.vad.webrtc.VadWebRTC

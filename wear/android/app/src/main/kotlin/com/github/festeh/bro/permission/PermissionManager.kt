@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.permission
+package com.github.festeh.bro.permission
 
 import android.Manifest
 import android.app.Activity

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.github.festeh.bro_wear"
+    namespace = "com.github.festeh.bro"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.github.festeh.bro_wear"
+        applicationId = "com.github.festeh.bro"
         // Wear OS 2.0+ requires minSdk 25
         minSdk = 25
         targetSdk = flutter.targetSdkVersion

@@ -1,4 +1,4 @@
-package com.github.festeh.bro_wear.audio
+package com.github.festeh.bro.audio
 
 class PreRollBuffer(
     private val sampleRate: Int,

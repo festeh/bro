@@ -1,8 +1,8 @@
-package com.github.festeh.bro_wear.sync
+package com.github.festeh.bro.sync
 
 import android.content.Context
 import android.util.Log
-import com.github.festeh.bro_wear.audio.SpeechSegment
+import com.github.festeh.bro.audio.SpeechSegment
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
