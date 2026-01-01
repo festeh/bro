@@ -125,8 +125,13 @@ class AudioService : Service() {
         // Finalize any pending speech
         if (isInSpeech) {
             finalizeSpeechSegment()
+            wakeLockManager.release()
         }
 
+        // Reset all state
+        isInSpeech = false
+        silenceStartTime = 0
+        consecutiveSpeechFrames = 0
         preRollBuffer.clear()
         vadStateStream?.emitStatus("idle")
         L.d(TAG, "stopListening done")
@@ -158,7 +163,7 @@ class AudioService : Service() {
                 wakeLockManager.acquireForWrite()
                 val preRoll = preRollBuffer.flush()
                 speechBuffer.start(preRoll, config.preRollMs)
-                speechBuffer.append(audioFrame)
+                // Note: current frame is already in preRoll, don't append again
             }
             // else: not enough consecutive frames yet, keep waiting
             return
