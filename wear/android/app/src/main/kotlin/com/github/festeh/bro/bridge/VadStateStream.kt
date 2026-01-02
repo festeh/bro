@@ -3,6 +3,7 @@ package com.github.festeh.bro.bridge
 import android.os.Handler
 import android.os.Looper
 import com.github.festeh.bro.vad.VadResult
+import com.github.festeh.bro.vad.VadStatus
 import io.flutter.plugin.common.EventChannel
 
 class VadStateStream : EventChannel.StreamHandler {
@@ -18,19 +19,20 @@ class VadStateStream : EventChannel.StreamHandler {
     }
 
     fun emit(result: VadResult) {
+        val status = if (result.isSpeech) VadStatus.SPEECH else VadStatus.SILENCE
         mainHandler.post {
             eventSink?.success(mapOf(
-                "status" to if (result.isSpeech) "speech" else "silence",
+                "status" to status.value,
                 "probability" to result.probability,
                 "timestamp" to result.timestamp
             ))
         }
     }
 
-    fun emitStatus(status: String) {
+    fun emitStatus(status: VadStatus) {
         mainHandler.post {
             eventSink?.success(mapOf(
-                "status" to status,
+                "status" to status.value,
                 "timestamp" to System.currentTimeMillis()
             ))
         }

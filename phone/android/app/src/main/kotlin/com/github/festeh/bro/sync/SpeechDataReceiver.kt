@@ -133,6 +133,7 @@ class SpeechDataReceiver : WearableListenerService() {
     /**
      * Extract waveform amplitudes from PCM data.
      * Returns normalized values (0.0 to 1.0) for visualization.
+     * Uses peak amplitude per bucket for better visual representation.
      */
     private fun extractWaveform(pcmData: ShortArray, numSamples: Int): DoubleArray {
         if (pcmData.isEmpty()) return DoubleArray(0)
@@ -148,13 +149,13 @@ class SpeechDataReceiver : WearableListenerService() {
             val start = i * samplesPerBucket
             val end = minOf(start + samplesPerBucket, pcmData.size)
 
-            // Calculate RMS for this bucket
-            var sum = 0.0
+            // Find peak amplitude in this bucket
+            var peak = 0.0
             for (j in start until end) {
-                val sample = pcmData[j].toDouble() / Short.MAX_VALUE
-                sum += sample * sample
+                val sample = abs(pcmData[j].toDouble()) / Short.MAX_VALUE
+                if (sample > peak) peak = sample
             }
-            waveform[i] = kotlin.math.sqrt(sum / (end - start))
+            waveform[i] = peak
         }
 
         return waveform

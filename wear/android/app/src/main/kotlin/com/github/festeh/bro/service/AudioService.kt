@@ -23,6 +23,7 @@ import com.github.festeh.bro.power.WakeLockManager
 import com.github.festeh.bro.sync.SpeechDataSender
 import com.github.festeh.bro.vad.VadConfig
 import com.github.festeh.bro.vad.VadResult
+import com.github.festeh.bro.vad.VadStatus
 import com.github.festeh.bro.vad.WebRtcVadEngine
 import com.github.festeh.bro.util.L
 import kotlinx.coroutines.CoroutineScope
@@ -109,7 +110,7 @@ class AudioService : Service() {
 
         listening = true
         L.d(TAG, "startListening success")
-        vadStateStream?.emitStatus("listening")
+        vadStateStream?.emitStatus(VadStatus.LISTENING)
         return true
     }
 
@@ -122,9 +123,10 @@ class AudioService : Service() {
         audioCapture = null
         vadEngine.stop()
 
-        // Finalize any pending speech
+        // Discard any pending speech (don't send incomplete segments)
         if (isInSpeech) {
-            finalizeSpeechSegment()
+            L.d(TAG, "Discarding incomplete segment on stopListening")
+            speechBuffer.clear()
             wakeLockManager.release()
         }
 
@@ -133,7 +135,7 @@ class AudioService : Service() {
         silenceStartTime = 0
         consecutiveSpeechFrames = 0
         preRollBuffer.clear()
-        vadStateStream?.emitStatus("idle")
+        vadStateStream?.emitStatus(VadStatus.IDLE)
         L.d(TAG, "stopListening done")
     }
 
@@ -160,7 +162,7 @@ class AudioService : Service() {
             if (consecutiveSpeechFrames >= config.triggerFrames) {
                 // Confirmed speech - start recording
                 isInSpeech = true
-                vadStateStream?.emitStatus("speech")
+                vadStateStream?.emitStatus(VadStatus.SPEECH)
                 wakeLockManager.acquireForWrite()
                 val preRoll = preRollBuffer.flush()
                 speechBuffer.start(preRoll, config.preRollMs)
@@ -175,9 +177,9 @@ class AudioService : Service() {
 
         // Check max duration
         if (speechBuffer.isMaxDurationReached()) {
-            finalizeSpeechSegment()
+            finalizeSpeechSegment("maxDuration_speech")
             isInSpeech = false
-            vadStateStream?.emitStatus("listening")
+            vadStateStream?.emitStatus(VadStatus.LISTENING)
             consecutiveSpeechFrames = 0
             wakeLockManager.release()
         }
@@ -193,9 +195,9 @@ class AudioService : Service() {
 
         // Check max duration first
         if (speechBuffer.isMaxDurationReached()) {
-            finalizeSpeechSegment()
+            finalizeSpeechSegment("maxDuration_silence")
             isInSpeech = false
-            vadStateStream?.emitStatus("listening")
+            vadStateStream?.emitStatus(VadStatus.LISTENING)
             silenceStartTime = 0
             wakeLockManager.release()
             return
@@ -207,16 +209,17 @@ class AudioService : Service() {
 
         val silenceDuration = System.currentTimeMillis() - silenceStartTime
         if (silenceDuration >= config.silenceTimeoutMs) {
-            finalizeSpeechSegment()
+            finalizeSpeechSegment("silenceTimeout")
             isInSpeech = false
-            vadStateStream?.emitStatus("listening")
+            vadStateStream?.emitStatus(VadStatus.LISTENING)
             silenceStartTime = 0
             wakeLockManager.release()
         }
     }
 
-    private fun finalizeSpeechSegment() {
+    private fun finalizeSpeechSegment(reason: String = "unknown") {
         val segment = speechBuffer.toSegment()
+        L.d(TAG, "Finalizing segment: reason=$reason, duration=${segment.durationMs}ms")
 
         // Encode to Opus
         val opusData = try {

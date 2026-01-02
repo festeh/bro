@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
 
     // Audio playback
     private val pcmPlayer by lazy { PcmPlayer() }
+    private var currentPlayingId: String? = null
 
     // Chat service
     private var chatService: AiChatService? = null
@@ -120,6 +121,9 @@ class MainActivity : FlutterActivity() {
                             val pcmData = OpusDecoder.decodeRawFrames(rawOpusData)
                             Log.d(TAG, "Decoded ${rawOpusData.size} bytes to ${pcmData.size} PCM samples")
 
+                            // Track which segment is playing
+                            currentPlayingId = id
+
                             // Play via AudioTrack
                             pcmPlayer.play(pcmData)
                             result.success(true)
@@ -132,12 +136,17 @@ class MainActivity : FlutterActivity() {
 
                 "stopAudio" -> {
                     pcmPlayer.stop()
+                    currentPlayingId = null
                     result.success(true)
                 }
 
                 "pauseAudio" -> {
                     pcmPlayer.pause()
                     result.success(true)
+                }
+
+                "getCurrentPlayingId" -> {
+                    result.success(currentPlayingId)
                 }
 
                 "resumeAudio" -> {
