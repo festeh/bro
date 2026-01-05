@@ -57,7 +57,16 @@ class AudioService : Service() {
     private var isInSpeech = false
     private var silenceStartTime: Long = 0
     private var listening = false
-    private var consecutiveSpeechFrames = 0
+    private val vadWindow = ArrayDeque<Boolean>(config.triggerWindow)
+
+    private fun addToVadWindow(isSpeech: Boolean) {
+        if (vadWindow.size >= config.triggerWindow) {
+            vadWindow.removeFirst()
+        }
+        vadWindow.addLast(isSpeech)
+    }
+
+    private fun speechCountInWindow(): Int = vadWindow.count { it }
 
     inner class LocalBinder : Binder() {
         fun getService(): AudioService = this@AudioService
@@ -133,7 +142,7 @@ class AudioService : Service() {
         // Reset all state
         isInSpeech = false
         silenceStartTime = 0
-        consecutiveSpeechFrames = 0
+        vadWindow.clear()
         preRollBuffer.clear()
         vadStateStream?.emitStatus(VadStatus.IDLE)
         L.d(TAG, "stopListening done")
@@ -156,10 +165,10 @@ class AudioService : Service() {
     }
 
     private fun handleSpeechDetected(audioFrame: ShortArray) {
-        consecutiveSpeechFrames++
+        addToVadWindow(true)
 
         if (!isInSpeech) {
-            if (consecutiveSpeechFrames >= config.triggerFrames) {
+            if (speechCountInWindow() >= config.triggerThreshold) {
                 // Confirmed speech - start recording
                 isInSpeech = true
                 vadStateStream?.emitStatus(VadStatus.SPEECH)
@@ -168,7 +177,7 @@ class AudioService : Service() {
                 speechBuffer.start(preRoll, config.preRollMs)
                 // Note: current frame is already in preRoll, don't append again
             }
-            // else: not enough consecutive frames yet, keep waiting
+            // else: not enough speech frames in window yet, keep waiting
             return
         }
 
@@ -180,13 +189,13 @@ class AudioService : Service() {
             finalizeSpeechSegment("maxDuration_speech")
             isInSpeech = false
             vadStateStream?.emitStatus(VadStatus.LISTENING)
-            consecutiveSpeechFrames = 0
+            vadWindow.clear()
             wakeLockManager.release()
         }
     }
 
     private fun handleSilenceDetected(audioFrame: ShortArray) {
-        consecutiveSpeechFrames = 0  // Reset trigger counter
+        addToVadWindow(false)  // Keep window accurate even during silence
 
         if (!isInSpeech) return
 
@@ -199,6 +208,7 @@ class AudioService : Service() {
             isInSpeech = false
             vadStateStream?.emitStatus(VadStatus.LISTENING)
             silenceStartTime = 0
+            vadWindow.clear()
             wakeLockManager.release()
             return
         }
@@ -213,6 +223,7 @@ class AudioService : Service() {
             isInSpeech = false
             vadStateStream?.emitStatus(VadStatus.LISTENING)
             silenceStartTime = 0
+            vadWindow.clear()
             wakeLockManager.release()
         }
     }
