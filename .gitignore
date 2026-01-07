@@ -1,0 +1,6 @@
+# Secrets
+egress-config.yaml
+*.env
+
+# Recordings
+recordings/
