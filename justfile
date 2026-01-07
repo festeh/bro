@@ -95,6 +95,51 @@ phone-build:
     cd phone && flutter build apk --debug
 
 # ─────────────────────────────────────────────────────────────
+# Desktop
+# ─────────────────────────────────────────────────────────────
+
+# Run desktop app
+desktop:
+    cd desktop && flutter run -d linux
+
+# Build desktop app
+desktop-build:
+    cd desktop && flutter build linux
+
+# ─────────────────────────────────────────────────────────────
+# LiveKit Server Stack (for desktop app)
+# ─────────────────────────────────────────────────────────────
+
+# Start Redis for LiveKit
+lk-redis:
+    docker run -d --name bro-redis -p 6379:6379 redis:7 redis-server --bind 0.0.0.0
+
+# Start LiveKit server (dev mode)
+lk-server:
+    livekit-server --dev --redis-host localhost:6379
+
+# Start Egress service (requires egress-config.yaml)
+lk-egress:
+    #!/usr/bin/env bash
+    mkdir -p recordings
+    docker run --rm --network host \
+        -e EGRESS_CONFIG_FILE=/config/config.yaml \
+        -v $(pwd)/egress-config.yaml:/config/config.yaml \
+        -v $(pwd)/recordings:/out \
+        livekit/egress:latest
+
+# Stop Redis container
+lk-redis-stop:
+    docker stop bro-redis && docker rm bro-redis
+
+# Full LiveKit stack (run in separate terminals)
+lk-stack:
+    @echo "Run these in separate terminals:"
+    @echo "  1. just lk-redis"
+    @echo "  2. just lk-server"
+    @echo "  3. just lk-egress"
+
+# ─────────────────────────────────────────────────────────────
 # Dev
 # ─────────────────────────────────────────────────────────────
 
@@ -102,20 +147,24 @@ phone-build:
 deps:
     cd wear && flutter pub get
     cd phone && flutter pub get
+    cd desktop && flutter pub get
 
 # Clean builds
 clean:
     cd wear && flutter clean
     cd phone && flutter clean
+    cd desktop && flutter clean
 
 # Lint
 lint:
     cd wear && flutter analyze
+    cd desktop && flutter analyze
 
 # Format code
 fmt:
     cd wear && dart format lib/
     cd phone && dart format lib/
+    cd desktop && dart format lib/
 
 # ─────────────────────────────────────────────────────────────
 # AI Server
