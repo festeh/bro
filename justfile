@@ -118,18 +118,18 @@ lk-redis:
 lk-server:
     livekit-server --dev --redis-host localhost:6379
 
-# Start Egress service (copy egress-config.yaml.example first)
+# Start Egress service
 lk-egress:
     #!/usr/bin/env bash
-    if [ ! -f egress-config.yaml ]; then
-        echo "Missing egress-config.yaml. Copy from example:"
-        echo "  cp egress-config.yaml.example egress-config.yaml"
-        exit 1
-    fi
     mkdir -p recordings
     docker run --rm --network host \
-        -e EGRESS_CONFIG_FILE=/config/config.yaml \
-        -v $(pwd)/egress-config.yaml:/config/config.yaml \
+        -e EGRESS_CONFIG_BODY="log_level: debug
+    api_key: ${LIVEKIT_API_KEY}
+    api_secret: ${LIVEKIT_API_SECRET}
+    ws_url: ws://localhost:7880
+    insecure: true
+    redis:
+      address: localhost:6379" \
         -v $(pwd)/recordings:/out \
         livekit/egress:latest
 
