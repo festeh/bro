@@ -1,0 +1,384 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/recording.dart';
+import '../services/egress_service.dart';
+import '../services/livekit_service.dart';
+import '../services/storage_service.dart';
+import '../theme/tokens.dart';
+import '../widgets/record_button.dart';
+import '../widgets/recording_list.dart';
+import '../widgets/waveform_widget.dart';
+
+class HomePage extends StatefulWidget {
+  final LiveKitService liveKitService;
+  final EgressService egressService;
+  final StorageService storageService;
+
+  const HomePage({
+    super.key,
+    required this.liveKitService,
+    required this.egressService,
+    required this.storageService,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final _audioPlayer = AudioPlayer();
+  final _uuid = const Uuid();
+
+  List<Recording> _recordings = [];
+  ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
+  bool _isRecording = false;
+  bool _isLoading = false;
+  String? _currentEgressId;
+  String? _playingRecordingId;
+  double _playbackProgress = 0.0;
+  Duration _recordingDuration = Duration.zero;
+  Timer? _recordingTimer;
+
+  StreamSubscription<List<Recording>>? _recordingsSub;
+  StreamSubscription<ConnectionStatus>? _connectionSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<PlayerState>? _playerStateSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    // Subscribe to recordings
+    _recordingsSub = widget.storageService.recordingsStream.listen((recordings) {
+      setState(() => _recordings = recordings);
+    });
+
+    // Subscribe to connection status
+    _connectionSub = widget.liveKitService.connectionStatus.listen((status) {
+      setState(() => _connectionStatus = status);
+    });
+
+    // Subscribe to audio player position
+    _positionSub = _audioPlayer.positionStream.listen((position) {
+      final duration = _audioPlayer.duration;
+      if (duration != null && duration.inMilliseconds > 0) {
+        setState(() {
+          _playbackProgress = position.inMilliseconds / duration.inMilliseconds;
+        });
+      }
+    });
+
+    // Subscribe to player state
+    _playerStateSub = _audioPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        setState(() {
+          _playingRecordingId = null;
+          _playbackProgress = 0.0;
+        });
+      }
+    });
+
+    // Load initial recordings
+    final recordings = await widget.storageService.getRecordings();
+    setState(() => _recordings = recordings);
+
+    // Connect to LiveKit
+    await _connectToLiveKit();
+  }
+
+  Future<void> _connectToLiveKit() async {
+    try {
+      await widget.liveKitService.connect();
+    } catch (e) {
+      _showError('Failed to connect to LiveKit: $e');
+    }
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      if (_isRecording) {
+        await _stopRecording();
+      } else {
+        await _startRecording();
+      }
+    } catch (e) {
+      _showError('Recording error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _startRecording() async {
+    // Enable microphone first
+    final trackId = await widget.liveKitService.enableMicrophone();
+    if (trackId == null) {
+      throw Exception('Failed to enable microphone');
+    }
+
+    // Generate filename with timestamp
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final filepath = '/out/recording-$timestamp.ogg';
+
+    // Start egress
+    final egress = await widget.egressService.startTrackEgress(
+      roomName: widget.liveKitService.roomName,
+      trackId: trackId,
+      filepath: filepath,
+    );
+
+    _currentEgressId = egress.egressId;
+    _recordingDuration = Duration.zero;
+
+    // Start timer
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _recordingDuration += const Duration(seconds: 1);
+      });
+    });
+
+    setState(() => _isRecording = true);
+  }
+
+  Future<void> _stopRecording() async {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+
+    if (_currentEgressId != null) {
+      final egress = await widget.egressService.stopEgress(_currentEgressId!);
+
+      // Create recording entry
+      final recording = Recording(
+        id: _uuid.v4(),
+        egressId: _currentEgressId,
+        title: 'Recording ${_recordings.length + 1}',
+        durationMs: _recordingDuration.inMilliseconds,
+        filePath: egress.filePath ?? '',
+        createdAt: DateTime.now(),
+      );
+
+      await widget.storageService.addRecording(recording);
+    }
+
+    await widget.liveKitService.disableMicrophone();
+
+    setState(() {
+      _isRecording = false;
+      _currentEgressId = null;
+      _recordingDuration = Duration.zero;
+    });
+  }
+
+  Future<void> _playPauseRecording(Recording recording) async {
+    if (_playingRecordingId == recording.id) {
+      // Pause current
+      if (_audioPlayer.playing) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
+      }
+    } else {
+      // Play new recording
+      await _audioPlayer.stop();
+      await _audioPlayer.setFilePath(recording.filePath);
+      await _audioPlayer.play();
+      setState(() {
+        _playingRecordingId = recording.id;
+        _playbackProgress = 0.0;
+      });
+    }
+  }
+
+  Future<void> _deleteRecording(Recording recording) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTokens.surfaceCard,
+        title: const Text('Delete Recording?'),
+        content: Text('Are you sure you want to delete "${recording.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTokens.accentRecording,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (_playingRecordingId == recording.id) {
+        await _audioPlayer.stop();
+        setState(() {
+          _playingRecordingId = null;
+          _playbackProgress = 0.0;
+        });
+      }
+      await widget.storageService.deleteRecording(recording.id);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTokens.accentRecording,
+      ),
+    );
+  }
+
+  String get _formattedRecordingDuration {
+    final minutes = _recordingDuration.inMinutes;
+    final seconds = _recordingDuration.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _recordingsSub?.cancel();
+    _connectionSub?.cancel();
+    _positionSub?.cancel();
+    _playerStateSub?.cancel();
+    _recordingTimer?.cancel();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Voice Recorder'),
+        actions: [
+          _ConnectionIndicator(status: _connectionStatus),
+          const SizedBox(width: AppTokens.spacingMd),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_isRecording) _RecordingIndicator(duration: _formattedRecordingDuration),
+          Expanded(
+            child: RecordingList(
+              recordings: _recordings,
+              playingRecordingId: _playingRecordingId,
+              playbackProgress: _playbackProgress,
+              onPlayPause: _playPauseRecording,
+              onDelete: _deleteRecording,
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: RecordButton(
+        isRecording: _isRecording,
+        isLoading: _isLoading,
+        onPressed: _connectionStatus == ConnectionStatus.connected
+            ? _toggleRecording
+            : null,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+}
+
+class _ConnectionIndicator extends StatelessWidget {
+  final ConnectionStatus status;
+
+  const _ConnectionIndicator({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    String tooltip;
+
+    switch (status) {
+      case ConnectionStatus.connected:
+        color = AppTokens.accentSuccess;
+        tooltip = 'Connected';
+        break;
+      case ConnectionStatus.connecting:
+        color = AppTokens.accentPrimary;
+        tooltip = 'Connecting...';
+        break;
+      case ConnectionStatus.error:
+        color = AppTokens.accentRecording;
+        tooltip = 'Connection error';
+        break;
+      case ConnectionStatus.disconnected:
+        color = AppTokens.textTertiary;
+        tooltip = 'Disconnected';
+        break;
+    }
+
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordingIndicator extends StatelessWidget {
+  final String duration;
+
+  const _RecordingIndicator({required this.duration});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTokens.spacingMd,
+        vertical: AppTokens.spacingSm,
+      ),
+      color: AppTokens.backgroundSecondary,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppTokens.accentRecording,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: AppTokens.spacingSm),
+          Text(
+            'Recording $duration',
+            style: const TextStyle(
+              color: AppTokens.textPrimary,
+              fontSize: AppTokens.fontSizeMd,
+              fontWeight: AppTokens.fontWeightMedium,
+            ),
+          ),
+          const SizedBox(width: AppTokens.spacingMd),
+          const SizedBox(
+            width: 100,
+            child: AnimatedRecordingWaveform(isRecording: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
