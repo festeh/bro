@@ -28,8 +28,11 @@ class Recording {
   String get formattedDate {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final recordingDate =
-        DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final recordingDate = DateTime(
+      createdAt.year,
+      createdAt.month,
+      createdAt.day,
+    );
 
     if (recordingDate == today) {
       return 'Today ${_formatTime(createdAt)}';

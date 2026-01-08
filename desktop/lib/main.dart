@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 
 import 'pages/home_page.dart';
@@ -13,9 +14,13 @@ import 'theme/theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Setup recordings directory
-  final homeDir = Platform.environment['HOME'] ?? '/tmp';
-  final recordingsDir = p.join(homeDir, '.bro', 'recordings');
+  // Initialize media_kit for Linux audio playback
+  MediaKit.ensureInitialized();
+
+  // Recordings directory - must match the egress mount in justfile
+  // App runs from desktop/, egress writes to ../recordings/
+  final cwd = Directory.current.path;
+  final recordingsDir = p.normalize(p.join(cwd, '..', 'recordings'));
 
   // Initialize services
   final tokenService = TokenService();
@@ -25,11 +30,13 @@ void main() async {
 
   await storageService.init();
 
-  runApp(VoiceRecorderApp(
-    liveKitService: liveKitService,
-    egressService: egressService,
-    storageService: storageService,
-  ));
+  runApp(
+    VoiceRecorderApp(
+      liveKitService: liveKitService,
+      egressService: egressService,
+      storageService: storageService,
+    ),
+  );
 }
 
 class VoiceRecorderApp extends StatefulWidget {
@@ -66,6 +73,7 @@ class _VoiceRecorderAppState extends State<VoiceRecorderApp> {
         liveKitService: widget.liveKitService,
         egressService: widget.egressService,
         storageService: widget.storageService,
+        recordingsDir: widget.storageService.recordingsDir,
       ),
     );
   }

@@ -17,7 +17,9 @@ class StorageService {
   Stream<List<Recording>> get recordingsStream => _recordingsController.stream;
 
   StorageService({required String recordingsDir})
-      : _recordingsDir = recordingsDir;
+    : _recordingsDir = recordingsDir;
+
+  String get recordingsDir => _recordingsDir;
 
   Future<void> init() async {
     // Initialize FFI for desktop
@@ -57,10 +59,7 @@ class StorageService {
   Future<List<Recording>> getRecordings() async {
     if (_db == null) return [];
 
-    final maps = await _db!.query(
-      _tableName,
-      orderBy: 'created_at DESC',
-    );
+    final maps = await _db!.query(_tableName, orderBy: 'created_at DESC');
 
     return maps.map((m) => Recording.fromMap(m)).toList();
   }
@@ -94,11 +93,7 @@ class StorageService {
     if (_db == null) return;
 
     // Get the recording first to delete the file
-    final maps = await _db!.query(
-      _tableName,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final maps = await _db!.query(_tableName, where: 'id = ?', whereArgs: [id]);
 
     if (maps.isNotEmpty) {
       final recording = Recording.fromMap(maps.first);
@@ -108,11 +103,7 @@ class StorageService {
       }
     }
 
-    await _db!.delete(
-      _tableName,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _db!.delete(_tableName, where: 'id = ?', whereArgs: [id]);
 
     await _emitRecordings();
   }
@@ -127,7 +118,9 @@ class StorageService {
     final dir = Directory(_recordingsDir);
     if (!await dir.exists()) return [];
 
-    final existingPaths = (await getRecordings()).map((r) => r.filePath).toSet();
+    final existingPaths = (await getRecordings())
+        .map((r) => r.filePath)
+        .toSet();
     final newFiles = <String>[];
 
     await for (final entity in dir.list()) {

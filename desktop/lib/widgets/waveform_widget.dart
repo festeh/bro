@@ -90,7 +90,8 @@ class _WaveformBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final minHeight = AppTokens.waveformHeight * 0.15;
     final maxHeight = AppTokens.waveformHeight * 0.9;
-    final height = minHeight + (maxHeight - minHeight) * amplitude.clamp(0.0, 1.0);
+    final height =
+        minHeight + (maxHeight - minHeight) * amplitude.clamp(0.0, 1.0);
 
     return AnimatedContainer(
       duration: AppTokens.animFast,
@@ -108,10 +109,7 @@ class _WaveformBar extends StatelessWidget {
 class AnimatedRecordingWaveform extends StatefulWidget {
   final bool isRecording;
 
-  const AnimatedRecordingWaveform({
-    super.key,
-    required this.isRecording,
-  });
+  const AnimatedRecordingWaveform({super.key, required this.isRecording});
 
   @override
   State<AnimatedRecordingWaveform> createState() =>
@@ -169,16 +167,19 @@ class _AnimatedRecordingWaveformState extends State<AnimatedRecordingWaveform>
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 50),
                 width: AppTokens.waveformBarWidth,
-                height: AppTokens.waveformHeight * 0.15 +
+                height:
+                    AppTokens.waveformHeight * 0.15 +
                     AppTokens.waveformHeight * 0.75 * amplitude,
                 margin: EdgeInsets.symmetric(
-                    horizontal: AppTokens.waveformBarGap / 2),
+                  horizontal: AppTokens.waveformBarGap / 2,
+                ),
                 decoration: BoxDecoration(
                   color: widget.isRecording
                       ? AppTokens.accentRecording
                       : AppTokens.waveformInactive,
-                  borderRadius:
-                      BorderRadius.circular(AppTokens.waveformBarWidth / 2),
+                  borderRadius: BorderRadius.circular(
+                    AppTokens.waveformBarWidth / 2,
+                  ),
                 ),
               );
             }),

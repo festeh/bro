@@ -122,6 +122,7 @@ lk-server:
 lk-egress:
     #!/usr/bin/env bash
     mkdir -p recordings
+    chmod 777 recordings
     docker run --rm --network host \
         -e EGRESS_CONFIG_BODY="log_level: debug
     api_key: ${LIVEKIT_API_KEY}

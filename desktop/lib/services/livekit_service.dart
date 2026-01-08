@@ -29,7 +29,7 @@ class LiveKitService {
   bool get isMicrophoneEnabled => _audioTrack != null;
 
   LiveKitService({TokenService? tokenService})
-      : _tokenService = tokenService ?? TokenService();
+    : _tokenService = tokenService ?? TokenService();
 
   Future<void> connect() async {
     if (_room != null) return;

@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../models/recording.dart';
@@ -17,12 +18,14 @@ class HomePage extends StatefulWidget {
   final LiveKitService liveKitService;
   final EgressService egressService;
   final StorageService storageService;
+  final String recordingsDir;
 
   const HomePage({
     super.key,
     required this.liveKitService,
     required this.egressService,
     required this.storageService,
+    required this.recordingsDir,
   });
 
   @override
@@ -30,7 +33,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _audioPlayer = AudioPlayer();
+  late final Player _player;
   final _uuid = const Uuid();
 
   List<Recording> _recordings = [];
@@ -46,17 +49,20 @@ class _HomePageState extends State<HomePage> {
   StreamSubscription<List<Recording>>? _recordingsSub;
   StreamSubscription<ConnectionStatus>? _connectionSub;
   StreamSubscription<Duration>? _positionSub;
-  StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<bool>? _playingStateSub;
 
   @override
   void initState() {
     super.initState();
+    _player = Player();
     _init();
   }
 
   Future<void> _init() async {
     // Subscribe to recordings
-    _recordingsSub = widget.storageService.recordingsStream.listen((recordings) {
+    _recordingsSub = widget.storageService.recordingsStream.listen((
+      recordings,
+    ) {
       setState(() => _recordings = recordings);
     });
 
@@ -66,18 +72,18 @@ class _HomePageState extends State<HomePage> {
     });
 
     // Subscribe to audio player position
-    _positionSub = _audioPlayer.positionStream.listen((position) {
-      final duration = _audioPlayer.duration;
-      if (duration != null && duration.inMilliseconds > 0) {
+    _positionSub = _player.stream.position.listen((position) {
+      final duration = _player.state.duration;
+      if (duration.inMilliseconds > 0) {
         setState(() {
           _playbackProgress = position.inMilliseconds / duration.inMilliseconds;
         });
       }
     });
 
-    // Subscribe to player state
-    _playerStateSub = _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
+    // Subscribe to player state - reset when playback completes
+    _playingStateSub = _player.stream.playing.listen((playing) {
+      if (!playing && _player.state.completed) {
         setState(() {
           _playingRecordingId = null;
           _playbackProgress = 0.0;
@@ -157,13 +163,18 @@ class _HomePageState extends State<HomePage> {
     if (_currentEgressId != null) {
       final egress = await widget.egressService.stopEgress(_currentEgressId!);
 
+      // Construct full path from recordings dir and filename
+      final filePath = egress.filename != null
+          ? p.join(widget.recordingsDir, egress.filename!)
+          : '';
+
       // Create recording entry
       final recording = Recording(
         id: _uuid.v4(),
         egressId: _currentEgressId,
         title: 'Recording ${_recordings.length + 1}',
         durationMs: _recordingDuration.inMilliseconds,
-        filePath: egress.filePath ?? '',
+        filePath: filePath,
         createdAt: DateTime.now(),
       );
 
@@ -181,17 +192,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _playPauseRecording(Recording recording) async {
     if (_playingRecordingId == recording.id) {
-      // Pause current
-      if (_audioPlayer.playing) {
-        await _audioPlayer.pause();
-      } else {
-        await _audioPlayer.play();
-      }
+      // Pause/resume current
+      await _player.playOrPause();
     } else {
       // Play new recording
-      await _audioPlayer.stop();
-      await _audioPlayer.setFilePath(recording.filePath);
-      await _audioPlayer.play();
+      await _player.open(Media(recording.filePath));
       setState(() {
         _playingRecordingId = recording.id;
         _playbackProgress = 0.0;
@@ -224,7 +229,7 @@ class _HomePageState extends State<HomePage> {
 
     if (confirmed == true) {
       if (_playingRecordingId == recording.id) {
-        await _audioPlayer.stop();
+        await _player.stop();
         setState(() {
           _playingRecordingId = null;
           _playbackProgress = 0.0;
@@ -254,9 +259,9 @@ class _HomePageState extends State<HomePage> {
     _recordingsSub?.cancel();
     _connectionSub?.cancel();
     _positionSub?.cancel();
-    _playerStateSub?.cancel();
+    _playingStateSub?.cancel();
     _recordingTimer?.cancel();
-    _audioPlayer.dispose();
+    _player.dispose();
     super.dispose();
   }
 
@@ -272,7 +277,8 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          if (_isRecording) _RecordingIndicator(duration: _formattedRecordingDuration),
+          if (_isRecording)
+            _RecordingIndicator(duration: _formattedRecordingDuration),
           Expanded(
             child: RecordingList(
               recordings: _recordings,
@@ -330,10 +336,7 @@ class _ConnectionIndicator extends StatelessWidget {
       child: Container(
         width: 8,
         height: 8,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
   }

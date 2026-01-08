@@ -33,7 +33,8 @@ dependencies:
 
   # LiveKit & Audio
   livekit_client: ^2.6.0
-  just_audio: ^0.10.5
+  media_kit: ^1.2.6
+  media_kit_libs_linux: any
 
   # Storage
   sqflite_common_ffi: ^2.4.0

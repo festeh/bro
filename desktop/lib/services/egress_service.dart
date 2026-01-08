@@ -7,27 +7,51 @@ import 'token_service.dart';
 class EgressInfo {
   final String egressId;
   final String status;
-  final String? filePath;
+  final String? filename;
   final int? duration;
 
   EgressInfo({
     required this.egressId,
     required this.status,
-    this.filePath,
+    this.filename,
     this.duration,
   });
 
   factory EgressInfo.fromJson(Map<String, dynamic> json) {
+    // Get file info from deprecated 'file' field or 'file_results' array
+    Map<String, dynamic>? fileInfo;
+    if (json['file'] is Map<String, dynamic>) {
+      fileInfo = json['file'] as Map<String, dynamic>;
+    } else if (json['file_results'] is List &&
+        (json['file_results'] as List).isNotEmpty) {
+      final first = (json['file_results'] as List).first;
+      if (first is Map<String, dynamic>) {
+        fileInfo = first;
+      }
+    }
+
+    // Parse duration - protobuf int64 may be encoded as string in JSON
+    int? duration;
+    final rawDuration = fileInfo?['duration'];
+    if (rawDuration is int) {
+      duration = rawDuration;
+    } else if (rawDuration is String) {
+      duration = int.tryParse(rawDuration);
+    }
+
+    // Extract just the filename (egress returns container path like /out/file.ogg)
+    final rawFilename = fileInfo?['filename']?.toString();
+    final filename = rawFilename != null ? rawFilename.split('/').last : null;
+
     return EgressInfo(
-      egressId: json['egress_id'] ?? json['egressId'] ?? '',
-      status: json['status'] ?? '',
-      filePath: json['file']?['filename'] ?? json['file_results']?[0]?['filename'],
-      duration: json['file']?['duration'] ?? json['file_results']?[0]?['duration'],
+      egressId: (json['egress_id'] ?? json['egressId'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      filename: filename,
+      duration: duration,
     );
   }
 
-  bool get isActive =>
-      status == 'EGRESS_STARTING' || status == 'EGRESS_ACTIVE';
+  bool get isActive => status == 'EGRESS_STARTING' || status == 'EGRESS_ACTIVE';
   bool get isComplete => status == 'EGRESS_COMPLETE';
 }
 
@@ -37,7 +61,7 @@ class EgressService {
   String? _cachedToken;
 
   EgressService({TokenService? tokenService})
-      : _tokenService = tokenService ?? TokenService();
+    : _tokenService = tokenService ?? TokenService();
 
   String get _token {
     _cachedToken ??= _tokenService.generateEgressToken();
@@ -45,9 +69,9 @@ class EgressService {
   }
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_token',
-      };
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $_token',
+  };
 
   /// Start recording a track to a file
   Future<EgressInfo> startTrackEgress({
@@ -61,9 +85,7 @@ class EgressService {
       body: jsonEncode({
         'room_name': roomName,
         'track_id': trackId,
-        'file': {
-          'filepath': filepath,
-        },
+        'file': {'filepath': filepath},
       }),
     );
 
@@ -79,9 +101,7 @@ class EgressService {
     final response = await http.post(
       Uri.parse('$_baseUrl/livekit.Egress/StopEgress'),
       headers: _headers,
-      body: jsonEncode({
-        'egress_id': egressId,
-      }),
+      body: jsonEncode({'egress_id': egressId}),
     );
 
     if (response.statusCode != 200) {

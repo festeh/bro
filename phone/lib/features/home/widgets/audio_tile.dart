@@ -42,8 +42,9 @@ class _AudioTileState extends State<AudioTile> {
 
       try {
         // Check if this tile's segment is still the one playing
-        final currentId =
-            await _channel.invokeMethod<String>('getCurrentPlayingId');
+        final currentId = await _channel.invokeMethod<String>(
+          'getCurrentPlayingId',
+        );
         if (currentId != widget.segment.id) {
           // Different segment is playing now, stop our updates
           if (mounted) {

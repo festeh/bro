@@ -80,10 +80,11 @@ class _RecordButtonState extends State<RecordButton>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: (widget.isRecording
-                        ? AppTokens.accentRecording
-                        : AppTokens.accentPrimary)
-                    .withOpacity(0.4),
+                color:
+                    (widget.isRecording
+                            ? AppTokens.accentRecording
+                            : AppTokens.accentPrimary)
+                        .withOpacity(0.4),
                 blurRadius: 16,
                 spreadRadius: 2,
               ),
