@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/recording.dart';
 import '../theme/tokens.dart';
 import 'waveform_widget.dart';
 
-class RecordingTile extends StatelessWidget {
+class RecordingTile extends StatefulWidget {
   final Recording recording;
   final bool isPlaying;
   final double playbackProgress;
   final VoidCallback? onPlayPause;
   final VoidCallback? onDelete;
+  final VoidCallback? onExtractWaveform;
 
   const RecordingTile({
     super.key,
@@ -18,10 +21,56 @@ class RecordingTile extends StatelessWidget {
     this.playbackProgress = 0.0,
     this.onPlayPause,
     this.onDelete,
+    this.onExtractWaveform,
   });
 
   @override
+  State<RecordingTile> createState() => _RecordingTileState();
+}
+
+class _RecordingTileState extends State<RecordingTile> {
+  Timer? _retryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _extractWaveformIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(RecordingTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If recording changed and new one has no waveform, extract it
+    if (oldWidget.recording.id != widget.recording.id) {
+      _retryTimer?.cancel();
+      _extractWaveformIfNeeded();
+    }
+    // If waveform was populated, cancel retry timer
+    if (widget.recording.waveformData != null) {
+      _retryTimer?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _extractWaveformIfNeeded() {
+    if (widget.recording.waveformData == null) {
+      widget.onExtractWaveform?.call();
+      // Schedule retry in case file isn't ready yet
+      _retryTimer?.cancel();
+      _retryTimer = Timer(const Duration(seconds: 1), _extractWaveformIfNeeded);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final waveform = widget.recording.waveformData;
+    final hasWaveform = waveform != null && waveform.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(bottom: AppTokens.spacingSm),
       decoration: BoxDecoration(
@@ -32,12 +81,12 @@ class RecordingTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-          onTap: onPlayPause,
+          onTap: widget.onPlayPause,
           child: Padding(
             padding: const EdgeInsets.all(AppTokens.spacingMd),
             child: Row(
               children: [
-                _PlayButton(isPlaying: isPlaying),
+                _PlayButton(isPlaying: widget.isPlaying),
                 const SizedBox(width: AppTokens.spacingMd),
                 Expanded(
                   child: Column(
@@ -48,7 +97,7 @@ class RecordingTile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              recording.title,
+                              widget.recording.title,
                               style: const TextStyle(
                                 color: AppTokens.textPrimary,
                                 fontSize: AppTokens.fontSizeMd,
@@ -59,7 +108,7 @@ class RecordingTile extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            recording.formattedDuration,
+                            widget.recording.formattedDuration,
                             style: const TextStyle(
                               color: AppTokens.textSecondary,
                               fontSize: AppTokens.fontSizeSm,
@@ -69,18 +118,21 @@ class RecordingTile extends StatelessWidget {
                       ),
                       const SizedBox(height: AppTokens.spacingXs),
                       Text(
-                        recording.formattedDate,
+                        widget.recording.formattedDate,
                         style: const TextStyle(
                           color: AppTokens.textTertiary,
                           fontSize: AppTokens.fontSizeXs,
                         ),
                       ),
                       const SizedBox(height: AppTokens.spacingSm),
-                      WaveformWidget(
-                        waveformData: recording.waveformData,
-                        progress: playbackProgress,
-                        isPlaying: isPlaying,
-                      ),
+                      if (hasWaveform)
+                        WaveformWidget(
+                          waveformData: widget.recording.waveformData,
+                          progress: widget.playbackProgress,
+                          isPlaying: widget.isPlaying,
+                        )
+                      else
+                        SizedBox(height: AppTokens.waveformHeight),
                     ],
                   ),
                 ),
@@ -91,7 +143,7 @@ class RecordingTile extends StatelessWidget {
                     color: AppTokens.textTertiary,
                     size: 20,
                   ),
-                  onPressed: onDelete,
+                  onPressed: widget.onDelete,
                   splashRadius: 20,
                 ),
               ],

@@ -42,13 +42,7 @@ class LiveKitService {
         identity: _identity,
       );
 
-      _room = Room();
-
-      _room!.addListener(_onRoomEvent);
-
-      await _room!.connect(
-        _wsUrl,
-        token,
+      _room = Room(
         roomOptions: const RoomOptions(
           adaptiveStream: true,
           dynacast: true,
@@ -57,6 +51,10 @@ class LiveKitService {
           ),
         ),
       );
+
+      _room!.addListener(_onRoomEvent);
+
+      await _room!.connect(_wsUrl, token);
 
       _connectionStatusController.add(ConnectionStatus.connected);
     } catch (e) {
@@ -87,7 +85,7 @@ class LiveKitService {
     // Get the audio track after enabling
     final publications = _room!.localParticipant?.audioTrackPublications;
     if (publications != null && publications.isNotEmpty) {
-      _audioTrack = publications.first.track as LocalAudioTrack?;
+      _audioTrack = publications.first.track;
       _audioTrackIdController.add(_audioTrack?.sid);
       return _audioTrack?.sid;
     }

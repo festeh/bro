@@ -9,6 +9,7 @@ import '../models/recording.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
 import '../services/storage_service.dart';
+import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
 import '../widgets/record_button.dart';
 import '../widgets/recording_list.dart';
@@ -35,6 +36,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final Player _player;
   final _uuid = const Uuid();
+  final _waveformService = WaveformService();
 
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
@@ -168,7 +170,7 @@ class _HomePageState extends State<HomePage> {
           ? p.join(widget.recordingsDir, egress.filename!)
           : '';
 
-      // Create recording entry
+      // Create recording entry (waveform extracted lazily on display)
       final recording = Recording(
         id: _uuid.v4(),
         egressId: _currentEgressId,
@@ -204,39 +206,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _deleteRecording(Recording recording) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTokens.surfaceCard,
-        title: const Text('Delete Recording?'),
-        content: Text('Are you sure you want to delete "${recording.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppTokens.accentRecording,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+  /// Extract waveform for a recording if not already present
+  Future<void> _extractWaveformIfNeeded(Recording recording) async {
+    if (recording.waveformData != null) return;
 
-    if (confirmed == true) {
-      if (_playingRecordingId == recording.id) {
-        await _player.stop();
-        setState(() {
-          _playingRecordingId = null;
-          _playbackProgress = 0.0;
-        });
-      }
-      await widget.storageService.deleteRecording(recording.id);
+    final waveform = await _waveformService.extractWaveform(recording.filePath);
+    // null means file not ready yet - don't store, will retry on next trigger
+    if (waveform == null) return;
+
+    final updated = recording.copyWith(waveformData: waveform);
+    await widget.storageService.updateRecording(updated);
+  }
+
+  Future<void> _deleteRecording(Recording recording) async {
+    if (_playingRecordingId == recording.id) {
+      await _player.stop();
+      setState(() {
+        _playingRecordingId = null;
+        _playbackProgress = 0.0;
+      });
     }
+    await widget.storageService.deleteRecording(recording.id);
   }
 
   void _showError(String message) {
@@ -286,6 +276,7 @@ class _HomePageState extends State<HomePage> {
               playbackProgress: _playbackProgress,
               onPlayPause: _playPauseRecording,
               onDelete: _deleteRecording,
+              onExtractWaveform: _extractWaveformIfNeeded,
             ),
           ),
         ],

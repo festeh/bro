@@ -10,6 +10,7 @@ class RecordingList extends StatelessWidget {
   final double playbackProgress;
   final void Function(Recording recording)? onPlayPause;
   final void Function(Recording recording)? onDelete;
+  final void Function(Recording recording)? onExtractWaveform;
 
   const RecordingList({
     super.key,
@@ -18,6 +19,7 @@ class RecordingList extends StatelessWidget {
     this.playbackProgress = 0.0,
     this.onPlayPause,
     this.onDelete,
+    this.onExtractWaveform,
   });
 
   @override
@@ -37,11 +39,13 @@ class RecordingList extends StatelessWidget {
         final isPlaying = recording.id == playingRecordingId;
 
         return RecordingTile(
+          key: ValueKey(recording.id),
           recording: recording,
           isPlaying: isPlaying,
           playbackProgress: isPlaying ? playbackProgress : 0.0,
           onPlayPause: () => onPlayPause?.call(recording),
           onDelete: () => onDelete?.call(recording),
+          onExtractWaveform: () => onExtractWaveform?.call(recording),
         );
       },
     );
@@ -60,7 +64,7 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.mic_none_rounded,
             size: 64,
-            color: AppTokens.textTertiary.withOpacity(0.5),
+            color: AppTokens.textTertiary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: AppTokens.spacingMd),
           const Text(

@@ -84,7 +84,7 @@ class _RecordButtonState extends State<RecordButton>
                     (widget.isRecording
                             ? AppTokens.accentRecording
                             : AppTokens.accentPrimary)
-                        .withOpacity(0.4),
+                        .withValues(alpha: 0.4),
                 blurRadius: 16,
                 spreadRadius: 2,
               ),

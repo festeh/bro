@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 
@@ -14,13 +15,28 @@ import 'theme/theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Set up logging
+  hierarchicalLoggingEnabled = true;
+  Logger.root.level = Level.ALL;
+  // Suppress verbose livekit logs
+  Logger('livekit').level = Level.INFO;
+  Logger.root.onRecord.listen((record) {
+    // ignore: avoid_print
+    print('${record.level.name}: ${record.loggerName}: ${record.message}');
+  });
+
   // Initialize media_kit for Linux audio playback
   MediaKit.ensureInitialized();
 
   // Recordings directory - must match the egress mount in justfile
-  // App runs from desktop/, egress writes to ../recordings/
   final cwd = Directory.current.path;
-  final recordingsDir = p.normalize(p.join(cwd, '..', 'recordings'));
+
+  // Try relative path first, fall back to absolute
+  var recordingsDir = p.normalize(p.join(cwd, '..', 'recordings'));
+  if (!Directory(recordingsDir).existsSync()) {
+    // Fallback to absolute path for development
+    recordingsDir = '/home/dima/projects/bro/recordings';
+  }
 
   // Initialize services
   final tokenService = TokenService();

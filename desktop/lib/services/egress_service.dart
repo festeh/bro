@@ -40,8 +40,7 @@ class EgressInfo {
     }
 
     // Extract just the filename (egress returns container path like /out/file.ogg)
-    final rawFilename = fileInfo?['filename']?.toString();
-    final filename = rawFilename != null ? rawFilename.split('/').last : null;
+    final filename = fileInfo?['filename']?.toString().split('/').last;
 
     return EgressInfo(
       egressId: (json['egress_id'] ?? json['egressId'] ?? '').toString(),
