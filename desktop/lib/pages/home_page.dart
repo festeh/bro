@@ -111,8 +111,12 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (event.isFinal && _isRecording) {
-        // Store final transcript with recording
-        _pendingTranscript = event.text;
+        // Append final transcript segments
+        if (_pendingTranscript == null || _pendingTranscript!.isEmpty) {
+          _pendingTranscript = event.text;
+        } else {
+          _pendingTranscript = '$_pendingTranscript ${event.text}';
+        }
       }
     });
 
