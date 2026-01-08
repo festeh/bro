@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -16,6 +17,8 @@ import '../widgets/record_button.dart';
 import '../widgets/recording_list.dart';
 import '../widgets/stt_provider_selector.dart';
 import '../widgets/waveform_widget.dart';
+
+final _log = Logger('HomePage');
 
 class HomePage extends StatefulWidget {
   final LiveKitService liveKitService;
@@ -124,8 +127,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _connectToLiveKit() async {
     try {
       await widget.liveKitService.connect();
-    } catch (e) {
-      _showError('Failed to connect to LiveKit: $e');
+    } catch (e, st) {
+      _showError('Failed to connect to LiveKit: $e', e, st);
     }
   }
 
@@ -140,8 +143,8 @@ class _HomePageState extends State<HomePage> {
       } else {
         await _startRecording();
       }
-    } catch (e) {
-      _showError('Recording error: $e');
+    } catch (e, st) {
+      _showError('Recording error: $e', e, st);
     } finally {
       setState(() => _isLoading = false);
     }
@@ -254,7 +257,8 @@ class _HomePageState extends State<HomePage> {
     await widget.storageService.deleteRecording(recording.id);
   }
 
-  void _showError(String message) {
+  void _showError(String message, [Object? error, StackTrace? stackTrace]) {
+    _log.severe(message, error, stackTrace);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
