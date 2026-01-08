@@ -46,7 +46,8 @@ class StorageService {
             duration_ms INTEGER NOT NULL,
             file_path TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            waveform_data TEXT
+            waveform_data TEXT,
+            transcript TEXT
           )
         ''');
       },

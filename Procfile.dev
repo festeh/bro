@@ -1,0 +1,4 @@
+redis: docker rm -f bro-redis 2>/dev/null; docker run --rm --name bro-redis -p 6379:6379 redis:7 redis-server --bind 0.0.0.0
+server: sleep 1 && livekit-server --dev --redis-host localhost:6379
+egress: sleep 2 && just lk-egress
+agent: uv run --project agent python agent/transcriber.py dev

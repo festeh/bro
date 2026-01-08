@@ -138,12 +138,33 @@ lk-egress:
 lk-redis-stop:
     docker stop bro-redis && docker rm bro-redis
 
-# Full LiveKit stack (run in separate terminals)
-lk-stack:
-    @echo "Run these in separate terminals:"
-    @echo "  1. just lk-redis"
-    @echo "  2. just lk-server"
-    @echo "  3. just lk-egress"
+# Start all backend services with pm2 (redis, livekit, egress, agent)
+backend:
+    pm2 start ecosystem.config.cjs
+
+# View logs for a specific process (e.g., just logs agent)
+logs process:
+    pm2 logs {{process}}
+
+# View all logs
+logs-all:
+    pm2 logs
+
+# Stop all backend services
+backend-stop:
+    pm2 stop all
+
+# Kill and delete all pm2 processes
+backend-kill:
+    pm2 kill
+
+# Restart a specific process (e.g., just restart agent)
+restart process:
+    pm2 restart {{process}}
+
+# Show pm2 process status
+backend-status:
+    pm2 status
 
 # ─────────────────────────────────────────────────────────────
 # Dev
@@ -171,6 +192,18 @@ fmt:
     cd wear && dart format lib/
     cd phone && dart format lib/
     cd desktop && dart format lib/
+
+# ─────────────────────────────────────────────────────────────
+# STT Agent (LiveKit transcription worker)
+# ─────────────────────────────────────────────────────────────
+
+# Run STT agent worker
+agent:
+    uv run --project agent python agent/transcriber.py dev
+
+# Sync agent dependencies
+agent-deps:
+    cd agent && uv sync
 
 # ─────────────────────────────────────────────────────────────
 # AI Server

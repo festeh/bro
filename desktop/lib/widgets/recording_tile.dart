@@ -133,6 +133,18 @@ class _RecordingTileState extends State<RecordingTile> {
                         )
                       else
                         SizedBox(height: AppTokens.waveformHeight),
+                      if (widget.recording.hasTranscript) ...[
+                        const SizedBox(height: AppTokens.spacingSm),
+                        Text(
+                          widget.recording.transcript!,
+                          style: const TextStyle(
+                            color: AppTokens.textSecondary,
+                            fontSize: AppTokens.fontSizeSm,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
                   ),
                 ),

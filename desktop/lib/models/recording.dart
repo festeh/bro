@@ -6,6 +6,7 @@ class Recording {
   final String filePath;
   final DateTime createdAt;
   final List<double>? waveformData;
+  final String? transcript;
 
   Recording({
     required this.id,
@@ -15,7 +16,10 @@ class Recording {
     required this.filePath,
     required this.createdAt,
     this.waveformData,
+    this.transcript,
   });
+
+  bool get hasTranscript => transcript != null && transcript!.isNotEmpty;
 
   Duration get duration => Duration(milliseconds: durationMs);
 
@@ -56,6 +60,7 @@ class Recording {
       'file_path': filePath,
       'created_at': createdAt.toIso8601String(),
       'waveform_data': waveformData?.join(','),
+      'transcript': transcript,
     };
   }
 
@@ -76,6 +81,7 @@ class Recording {
       filePath: map['file_path'],
       createdAt: DateTime.parse(map['created_at']),
       waveformData: waveform,
+      transcript: map['transcript'],
     );
   }
 
@@ -87,6 +93,7 @@ class Recording {
     String? filePath,
     DateTime? createdAt,
     List<double>? waveformData,
+    String? transcript,
   }) {
     return Recording(
       id: id ?? this.id,
@@ -96,6 +103,7 @@ class Recording {
       filePath: filePath ?? this.filePath,
       createdAt: createdAt ?? this.createdAt,
       waveformData: waveformData ?? this.waveformData,
+      transcript: transcript ?? this.transcript,
     );
   }
 }

@@ -11,8 +11,10 @@ import '../services/livekit_service.dart';
 import '../services/storage_service.dart';
 import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
+import '../widgets/live_transcript.dart';
 import '../widgets/record_button.dart';
 import '../widgets/recording_list.dart';
+import '../widgets/stt_provider_selector.dart';
 import '../widgets/waveform_widget.dart';
 
 class HomePage extends StatefulWidget {
@@ -40,6 +42,7 @@ class _HomePageState extends State<HomePage> {
 
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
+  SttProvider _sttProvider = SttProvider.deepgram;
   bool _isRecording = false;
   bool _isLoading = false;
   String? _currentEgressId;
@@ -47,11 +50,14 @@ class _HomePageState extends State<HomePage> {
   double _playbackProgress = 0.0;
   Duration _recordingDuration = Duration.zero;
   Timer? _recordingTimer;
+  String? _currentTranscript;
+  String? _pendingTranscript;
 
   StreamSubscription<List<Recording>>? _recordingsSub;
   StreamSubscription<ConnectionStatus>? _connectionSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<bool>? _playingStateSub;
+  StreamSubscription<TranscriptionEvent>? _transcriptionSub;
 
   @override
   void initState() {
@@ -90,6 +96,20 @@ class _HomePageState extends State<HomePage> {
           _playingRecordingId = null;
           _playbackProgress = 0.0;
         });
+      }
+    });
+
+    // Subscribe to transcription events
+    _transcriptionSub = widget.liveKitService.transcriptionStream.listen((
+      event,
+    ) {
+      setState(() {
+        _currentTranscript = event.text;
+      });
+
+      if (event.isFinal && _isRecording) {
+        // Store final transcript with recording
+        _pendingTranscript = event.text;
       }
     });
 
@@ -147,6 +167,8 @@ class _HomePageState extends State<HomePage> {
 
     _currentEgressId = egress.egressId;
     _recordingDuration = Duration.zero;
+    _currentTranscript = null;
+    _pendingTranscript = null;
 
     // Start timer
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -178,6 +200,7 @@ class _HomePageState extends State<HomePage> {
         durationMs: _recordingDuration.inMilliseconds,
         filePath: filePath,
         createdAt: DateTime.now(),
+        transcript: _pendingTranscript,
       );
 
       await widget.storageService.addRecording(recording);
@@ -189,6 +212,8 @@ class _HomePageState extends State<HomePage> {
       _isRecording = false;
       _currentEgressId = null;
       _recordingDuration = Duration.zero;
+      _currentTranscript = null;
+      _pendingTranscript = null;
     });
   }
 
@@ -250,9 +275,15 @@ class _HomePageState extends State<HomePage> {
     _connectionSub?.cancel();
     _positionSub?.cancel();
     _playingStateSub?.cancel();
+    _transcriptionSub?.cancel();
     _recordingTimer?.cancel();
     _player.dispose();
     super.dispose();
+  }
+
+  void _onSttProviderChanged(SttProvider provider) {
+    setState(() => _sttProvider = provider);
+    widget.liveKitService.setSttProvider(provider);
   }
 
   @override
@@ -261,14 +292,26 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Voice Recorder'),
         actions: [
+          SttProviderSelector(
+            currentProvider: _sttProvider,
+            onChanged: _onSttProviderChanged,
+          ),
           _ConnectionIndicator(status: _connectionStatus),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
       body: Column(
         children: [
-          if (_isRecording)
+          if (_isRecording) ...[
             _RecordingIndicator(duration: _formattedRecordingDuration),
+            if (_currentTranscript != null && _currentTranscript!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTokens.spacingMd,
+                ),
+                child: LiveTranscript(text: _currentTranscript),
+              ),
+          ],
           Expanded(
             child: RecordingList(
               recordings: _recordings,
