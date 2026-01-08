@@ -32,7 +32,6 @@ module.exports = {
       script: 'bash',
       args: '-c "uv run --project agent python agent/transcriber.py dev"',
       autorestart: true,
-      watch: ['agent/*.py'],
       cwd: '/home/dima/projects/bro',
       out_file: `${logDir}/agent.log`,
       error_file: `${logDir}/agent.log`,
