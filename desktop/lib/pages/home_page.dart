@@ -12,11 +12,12 @@ import '../services/livekit_service.dart';
 import '../services/storage_service.dart';
 import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
+import '../widgets/app_sidebar.dart';
 import '../widgets/live_transcript.dart';
 import '../widgets/record_button.dart';
 import '../widgets/recording_list.dart';
-import '../widgets/stt_provider_selector.dart';
 import '../widgets/waveform_widget.dart';
+import 'chat_page.dart';
 
 final _log = Logger('HomePage');
 
@@ -43,9 +44,12 @@ class _HomePageState extends State<HomePage> {
   final _uuid = const Uuid();
   final _waveformService = WaveformService();
 
+  AppMode _currentMode = AppMode.chat;
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   SttProvider _sttProvider = SttProvider.deepgram;
+  LlmModel _llmModel = LlmModel.deepseekV31;
+  bool _ttsEnabled = true;
   bool _isRecording = false;
   bool _isLoading = false;
   String? _currentEgressId;
@@ -74,16 +78,19 @@ class _HomePageState extends State<HomePage> {
     _recordingsSub = widget.storageService.recordingsStream.listen((
       recordings,
     ) {
+      if (!mounted) return;
       setState(() => _recordings = recordings);
     });
 
     // Subscribe to connection status
     _connectionSub = widget.liveKitService.connectionStatus.listen((status) {
+      if (!mounted) return;
       setState(() => _connectionStatus = status);
     });
 
     // Subscribe to audio player position
     _positionSub = _player.stream.position.listen((position) {
+      if (!mounted) return;
       final duration = _player.state.duration;
       if (duration.inMilliseconds > 0) {
         setState(() {
@@ -94,6 +101,7 @@ class _HomePageState extends State<HomePage> {
 
     // Subscribe to player state - reset when playback completes
     _playingStateSub = _player.stream.playing.listen((playing) {
+      if (!mounted) return;
       if (!playing && _player.state.completed) {
         setState(() {
           _playingRecordingId = null;
@@ -106,6 +114,7 @@ class _HomePageState extends State<HomePage> {
     _transcriptionSub = widget.liveKitService.transcriptionStream.listen((
       event,
     ) {
+      if (!mounted) return;
       setState(() {
         _currentTranscript = event.text;
       });
@@ -279,13 +288,17 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _recordingsSub?.cancel();
-    _connectionSub?.cancel();
+    // Cancel player subscriptions first to prevent callbacks during disposal
     _positionSub?.cancel();
     _playingStateSub?.cancel();
+    // Stop player before disposing to clean up native resources
+    _player.stop();
+    _player.dispose();
+    // Cancel other subscriptions
+    _recordingsSub?.cancel();
+    _connectionSub?.cancel();
     _transcriptionSub?.cancel();
     _recordingTimer?.cancel();
-    _player.dispose();
     super.dispose();
   }
 
@@ -294,52 +307,90 @@ class _HomePageState extends State<HomePage> {
     widget.liveKitService.setSttProvider(provider);
   }
 
+  void _onLlmModelChanged(LlmModel model) {
+    setState(() => _llmModel = model);
+    widget.liveKitService.setLlmModel(model);
+  }
+
+  void _onTtsEnabledChanged(bool enabled) {
+    setState(() => _ttsEnabled = enabled);
+    widget.liveKitService.setTtsEnabled(enabled);
+  }
+
+  void _onModeChanged(AppMode mode) {
+    setState(() => _currentMode = mode);
+    // Update agent mode based on app mode
+    final agentMode =
+        mode == AppMode.chat ? AgentMode.chat : AgentMode.transcribe;
+    widget.liveKitService.setAgentMode(agentMode);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Voice Recorder'),
+        title: Text(_currentMode == AppMode.chat ? 'Chat' : 'Recordings'),
         actions: [
-          SttProviderSelector(
-            currentProvider: _sttProvider,
-            onChanged: _onSttProviderChanged,
-          ),
           _ConnectionIndicator(status: _connectionStatus),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
-      body: Column(
+      body: Row(
         children: [
-          if (_isRecording) ...[
-            _RecordingIndicator(duration: _formattedRecordingDuration),
-            if (_currentTranscript != null && _currentTranscript!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTokens.spacingMd,
-                ),
-                child: LiveTranscript(text: _currentTranscript),
-              ),
-          ],
+          AppSidebar(
+            currentMode: _currentMode,
+            onModeChanged: _onModeChanged,
+            sttProvider: _sttProvider,
+            onSttProviderChanged: _onSttProviderChanged,
+            llmModel: _llmModel,
+            onLlmModelChanged: _onLlmModelChanged,
+            ttsEnabled: _ttsEnabled,
+            onTtsEnabledChanged: _onTtsEnabledChanged,
+          ),
           Expanded(
-            child: RecordingList(
-              recordings: _recordings,
-              playingRecordingId: _playingRecordingId,
-              playbackProgress: _playbackProgress,
-              onPlayPause: _playPauseRecording,
-              onDelete: _deleteRecording,
-              onExtractWaveform: _extractWaveformIfNeeded,
-            ),
+            child: _currentMode == AppMode.chat
+                ? ChatPage(liveKitService: widget.liveKitService)
+                : _buildRecordingsContent(),
           ),
         ],
       ),
-      floatingActionButton: RecordButton(
-        isRecording: _isRecording,
-        isLoading: _isLoading,
-        onPressed: _connectionStatus == ConnectionStatus.connected
-            ? _toggleRecording
-            : null,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildRecordingsContent() {
+    return Column(
+      children: [
+        if (_isRecording) ...[
+          _RecordingIndicator(duration: _formattedRecordingDuration),
+          if (_currentTranscript != null && _currentTranscript!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTokens.spacingMd,
+              ),
+              child: LiveTranscript(text: _currentTranscript),
+            ),
+        ],
+        Expanded(
+          child: RecordingList(
+            recordings: _recordings,
+            playingRecordingId: _playingRecordingId,
+            playbackProgress: _playbackProgress,
+            onPlayPause: _playPauseRecording,
+            onDelete: _deleteRecording,
+            onExtractWaveform: _extractWaveformIfNeeded,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppTokens.spacingLg),
+          child: RecordButton(
+            isRecording: _isRecording,
+            isLoading: _isLoading,
+            onPressed: _connectionStatus == ConnectionStatus.connected
+                ? _toggleRecording
+                : null,
+          ),
+        ),
+      ],
     );
   }
 }

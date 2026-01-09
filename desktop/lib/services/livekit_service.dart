@@ -10,7 +10,11 @@ final _log = Logger('LiveKitService');
 
 enum ConnectionStatus { disconnected, connecting, connected, error }
 
-enum SttProvider { deepgram, elevenlabs, chutes }
+enum SttProvider { deepgram, elevenlabs }
+
+enum LlmModel { glm47, mimoV2, minimax, kimiK2, deepseekV31 }
+
+enum AgentMode { chat, transcribe }
 
 class TranscriptionEvent {
   final String segmentId;
@@ -35,6 +39,9 @@ class LiveKitService {
   Room? _room;
   LocalAudioTrack? _audioTrack;
   SttProvider _sttProvider = SttProvider.deepgram;
+  LlmModel _llmModel = LlmModel.deepseekV31;
+  AgentMode _agentMode = AgentMode.chat;
+  bool _ttsEnabled = true;
 
   final _connectionStatusController =
       StreamController<ConnectionStatus>.broadcast();
@@ -53,6 +60,9 @@ class LiveKitService {
   bool get isConnected => _room?.connectionState == ConnectionState.connected;
   bool get isMicrophoneEnabled => _audioTrack != null;
   SttProvider get sttProvider => _sttProvider;
+  LlmModel get llmModel => _llmModel;
+  AgentMode get agentMode => _agentMode;
+  bool get ttsEnabled => _ttsEnabled;
 
   LiveKitService({TokenService? tokenService})
     : _tokenService = tokenService ?? TokenService();
@@ -111,8 +121,34 @@ class LiveKitService {
     _log.info('STT provider changed to: ${provider.name}');
   }
 
+  /// Change LLM model
+  void setLlmModel(LlmModel model) {
+    _llmModel = model;
+    _updateMetadata();
+    _log.info('LLM model changed to: ${model.name}');
+  }
+
+  /// Change agent mode - affects whether LLM/TTS are used
+  void setAgentMode(AgentMode mode) {
+    _agentMode = mode;
+    _updateMetadata();
+    _log.info('Agent mode changed to: ${mode.name}');
+  }
+
+  /// Enable/disable TTS (voice responses)
+  void setTtsEnabled(bool enabled) {
+    _ttsEnabled = enabled;
+    _updateMetadata();
+    _log.info('TTS enabled: $enabled');
+  }
+
   void _updateMetadata() {
-    final metadata = jsonEncode({'stt_provider': _sttProvider.name});
+    final metadata = jsonEncode({
+      'stt_provider': _sttProvider.name,
+      'llm_model': _llmModel.name,
+      'agent_mode': _agentMode.name,
+      'tts_enabled': _ttsEnabled,
+    });
     _room?.localParticipant?.setMetadata(metadata);
   }
 

@@ -28,7 +28,6 @@ class SttProviderSelector extends StatelessWidget {
           value: SttProvider.elevenlabs,
           child: Text('ElevenLabs'),
         ),
-        const PopupMenuItem(value: SttProvider.chutes, child: Text('Chutes')),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppTokens.spacingSm),

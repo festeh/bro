@@ -199,7 +199,7 @@ fmt:
 
 # Run STT agent worker
 agent:
-    uv run --project agent python agent/transcriber.py dev
+    uv run --project agent python agent/voice_agent.py dev
 
 # Sync agent dependencies
 agent-deps:

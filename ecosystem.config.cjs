@@ -30,7 +30,7 @@ module.exports = {
     {
       name: 'agent',
       script: 'bash',
-      args: '-c "uv run --project agent python agent/transcriber.py dev"',
+      args: '-c "uv run --project agent python agent/voice_agent.py dev"',
       autorestart: true,
       cwd: '/home/dima/projects/bro',
       out_file: `${logDir}/agent.log`,
