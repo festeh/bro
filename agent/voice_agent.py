@@ -2,8 +2,11 @@ import asyncio
 import json
 import logging
 import os
+import uuid
+from typing import AsyncIterable
 
 from dotenv import load_dotenv
+from livekit import rtc
 
 from livekit.agents import (
     Agent,
@@ -17,8 +20,11 @@ from livekit.agents import (
     llm,
     room_io,
 )
+from livekit.agents.voice import ModelSettings
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+from constants import TOPIC_LLM_STREAM, ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL
 
 load_dotenv()
 
@@ -57,7 +63,7 @@ def create_llm(model_key: str):
 
 
 class ChatAgent(Agent):
-    """Chat mode: STT → LLM → TTS with auto turn detection"""
+    """Chat mode: STT → LLM → TTS with auto turn detection and immediate text streaming"""
 
     def __init__(
         self,
@@ -71,6 +77,53 @@ class ChatAgent(Agent):
             llm=create_llm(llm_model),
             tts=elevenlabs.TTS() if tts_enabled else None,
         )
+        self._room: rtc.Room | None = None
+        self._immediate_writer: rtc.TextStreamWriter | None = None
+        self._segment_id: str = ""
+
+    def set_room(self, room: rtc.Room):
+        """Set room reference for immediate text streaming."""
+        self._room = room
+
+    async def transcription_node(
+        self,
+        text: AsyncIterable[str],
+        model_settings: ModelSettings,
+    ) -> AsyncIterable[str]:
+        """Stream text immediately while also passing through for TTS sync."""
+        self._segment_id = f"LLM_{uuid.uuid4().hex[:8]}"
+
+        async for chunk in text:
+            # Send immediately via separate topic
+            if self._room and chunk:
+                await self._send_immediate(chunk)
+            # Also yield for normal synced flow
+            yield chunk
+
+        # Flush immediate stream
+        await self._flush_immediate()
+
+    async def _send_immediate(self, text: str):
+        """Send text chunk immediately to room."""
+        if not self._room:
+            return
+
+        if not self._immediate_writer:
+            self._immediate_writer = await self._room.local_participant.stream_text(
+                topic=TOPIC_LLM_STREAM,
+                attributes={
+                    ATTR_SEGMENT_ID: self._segment_id,
+                    ATTR_TRANSCRIPTION_FINAL: "false",
+                },
+            )
+
+        await self._immediate_writer.write(text)
+
+    async def _flush_immediate(self):
+        """Mark immediate stream as complete."""
+        if self._immediate_writer:
+            await self._immediate_writer.aclose()
+            self._immediate_writer = None
 
 
 class TranscribeAgent(Agent):
@@ -154,11 +207,13 @@ async def entrypoint(ctx: JobContext):
     def create_agent(s: dict) -> Agent:
         """Create agent based on current settings."""
         if s["agent_mode"] == "chat":
-            return ChatAgent(
+            agent = ChatAgent(
                 stt_provider=s["stt_provider"],
                 llm_model=s["llm_model"],
                 tts_enabled=s["tts_enabled"],
             )
+            agent.set_room(ctx.room)  # Pass room for immediate text streaming
+            return agent
         else:
             return TranscribeAgent(stt_provider=s["stt_provider"])
 

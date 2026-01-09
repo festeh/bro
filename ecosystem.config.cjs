@@ -36,5 +36,14 @@ module.exports = {
       out_file: `${logDir}/agent.log`,
       error_file: `${logDir}/agent.log`,
     },
+    {
+      name: 'desktop',
+      script: 'bash',
+      args: '-c "cd desktop && flutter run -d linux"',
+      autorestart: false,
+      cwd: '/home/dima/projects/bro',
+      out_file: `${logDir}/desktop.log`,
+      error_file: `${logDir}/desktop.log`,
+    },
   ],
 };

@@ -41,6 +41,7 @@ class _ChatPageState extends State<ChatPage> {
 
   StreamSubscription<ConnectionStatus>? _connectionSub;
   StreamSubscription<TranscriptionEvent>? _transcriptionSub;
+  StreamSubscription<ImmediateTextEvent>? _immediateTextSub;
 
   @override
   void initState() {
@@ -57,6 +58,9 @@ class _ChatPageState extends State<ChatPage> {
     _transcriptionSub =
         widget.liveKitService.transcriptionStream.listen(_onTranscription);
 
+    _immediateTextSub =
+        widget.liveKitService.immediateTextStream.listen(_onImmediateText);
+
     _connectionStatus = widget.liveKitService.isConnected
         ? ConnectionStatus.connected
         : ConnectionStatus.disconnected;
@@ -67,57 +71,78 @@ class _ChatPageState extends State<ChatPage> {
 
     final isAgentResponse = event.participantId.contains('agent');
 
+    // Agent transcription is handled via immediate text stream (lk.llm_stream)
+    // This stream (lk.transcription) is synced with TTS - could use for word highlighting
     if (isAgentResponse) {
-      // Agent is responding - first finalize user message if pending
-      if (_isUserTurnActive && _liveUserText.isNotEmpty) {
-        _finalizeUserMessage();
-      }
-
-      // Update agent response
-      setState(() {
-        _pendingAssistantMessage = event.text;
-      });
-
-      if (event.isFinal && event.text.isNotEmpty) {
-        _addMessage(event.text, isUser: false);
-        setState(() {
-          _pendingAssistantMessage = null;
-        });
-      }
-    } else {
-      // User speech - update live text
-      setState(() {
-        if (!_isUserTurnActive) {
-          // First speech in this turn
-          _isUserTurnActive = true;
-          _liveUserTimestamp = DateTime.now();
-          _accumulatedFinals = '';
-        }
-
-        if (event.isFinal) {
-          // Final segment - append to accumulated finals
-          if (_accumulatedFinals.isEmpty) {
-            _accumulatedFinals = event.text;
-          } else {
-            _accumulatedFinals = '$_accumulatedFinals ${event.text}';
-          }
-          _liveUserText = _accumulatedFinals;
-
-          // User turn is complete - finalize and show agent thinking
-          _finalizeUserMessage();
-          _pendingAssistantMessage = ''; // Empty = show "..." thinking indicator
-        } else {
-          // Interim - show accumulated finals + current interim
-          if (_accumulatedFinals.isEmpty) {
-            _liveUserText = event.text;
-          } else {
-            _liveUserText = '$_accumulatedFinals ${event.text}';
-          }
-        }
-      });
-
-      _scrollToBottom();
+      return;
     }
+
+    // User speech - finalize any pending agent message first
+    if (_pendingAssistantMessage != null &&
+        _pendingAssistantMessage!.isNotEmpty) {
+      _addMessage(_pendingAssistantMessage!, isUser: false);
+      setState(() {
+        _pendingAssistantMessage = null;
+      });
+    }
+
+    // Update live text
+    setState(() {
+      if (!_isUserTurnActive) {
+        // First speech in this turn
+        _isUserTurnActive = true;
+        _liveUserTimestamp = DateTime.now();
+        _accumulatedFinals = '';
+      }
+
+      if (event.isFinal) {
+        // Final segment - append to accumulated finals
+        if (_accumulatedFinals.isEmpty) {
+          _accumulatedFinals = event.text;
+        } else {
+          _accumulatedFinals = '$_accumulatedFinals ${event.text}';
+        }
+        _liveUserText = _accumulatedFinals;
+
+        // User turn is complete - finalize and show agent thinking
+        _finalizeUserMessage();
+        _pendingAssistantMessage = ''; // Empty = show "..." thinking indicator
+      } else {
+        // Interim - show accumulated finals + current interim
+        if (_accumulatedFinals.isEmpty) {
+          _liveUserText = event.text;
+        } else {
+          _liveUserText = '$_accumulatedFinals ${event.text}';
+        }
+      }
+    });
+
+    _scrollToBottom();
+  }
+
+  void _onImmediateText(ImmediateTextEvent event) {
+    if (!mounted) return;
+
+    // Only handle agent responses
+    if (!event.participantId.contains('agent')) {
+      return;
+    }
+
+    // Agent is responding - first finalize user message if pending
+    if (_isUserTurnActive && _liveUserText.isNotEmpty) {
+      _finalizeUserMessage();
+    }
+
+    // Accumulate immediate text chunks
+    setState(() {
+      if (_pendingAssistantMessage == null || _pendingAssistantMessage!.isEmpty) {
+        _pendingAssistantMessage = event.text;
+      } else {
+        _pendingAssistantMessage = '$_pendingAssistantMessage${event.text}';
+      }
+    });
+
+    _scrollToBottom();
   }
 
   String _accumulatedFinals = '';
@@ -176,10 +201,22 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  void _clearChat() {
+    setState(() {
+      _messages = [];
+      _liveUserText = '';
+      _liveUserTimestamp = null;
+      _isUserTurnActive = false;
+      _accumulatedFinals = '';
+      _pendingAssistantMessage = null;
+    });
+  }
+
   @override
   void dispose() {
     _connectionSub?.cancel();
     _transcriptionSub?.cancel();
+    _immediateTextSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -223,13 +260,20 @@ class _ChatPageState extends State<ChatPage> {
                 ),
         ),
 
-        // Bottom bar with mic button
+        // Bottom bar with mic button and clear
         Container(
           padding: const EdgeInsets.all(AppTokens.spacingMd),
           color: AppTokens.backgroundSecondary,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                color: AppTokens.textSecondary,
+                onPressed: _messages.isNotEmpty ? _clearChat : null,
+                tooltip: 'Clear chat',
+              ),
+              const SizedBox(width: AppTokens.spacingMd),
               RecordButton(
                 isRecording: _isMicEnabled,
                 isLoading: false,

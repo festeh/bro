@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:livekit_client/livekit_client.dart';
 import 'package:logging/logging.dart';
 
+import '../constants/livekit_constants.dart';
 import 'token_service.dart';
 
 final _log = Logger('LiveKitService');
@@ -30,6 +32,19 @@ class TranscriptionEvent {
   });
 }
 
+/// Immediate LLM text event (arrives before TTS-synced transcription)
+class ImmediateTextEvent {
+  final String segmentId;
+  final String text;
+  final String participantId;
+
+  ImmediateTextEvent({
+    required this.segmentId,
+    required this.text,
+    required this.participantId,
+  });
+}
+
 class LiveKitService {
   static const String _wsUrl = 'ws://localhost:7880';
   static const String _roomName = 'voice-recorder';
@@ -48,12 +63,16 @@ class LiveKitService {
   final _audioTrackIdController = StreamController<String?>.broadcast();
   final _transcriptionController =
       StreamController<TranscriptionEvent>.broadcast();
+  final _immediateTextController =
+      StreamController<ImmediateTextEvent>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
   Stream<String?> get audioTrackId => _audioTrackIdController.stream;
   Stream<TranscriptionEvent> get transcriptionStream =>
       _transcriptionController.stream;
+  Stream<ImmediateTextEvent> get immediateTextStream =>
+      _immediateTextController.stream;
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
@@ -92,8 +111,15 @@ class LiveKitService {
 
       await _room!.connect(_wsUrl, token);
 
-      // Register transcription handler
-      _room!.registerTextStreamHandler('lk.transcription', _onTranscription);
+      // Register transcription handlers
+      _room!.registerTextStreamHandler(
+        LiveKitTopics.transcription,
+        _onTranscription,
+      );
+      _room!.registerTextStreamHandler(
+        LiveKitTopics.llmStream,
+        _onImmediateText,
+      );
 
       // Set initial STT provider in metadata
       _updateMetadata();
@@ -107,7 +133,8 @@ class LiveKitService {
 
   Future<void> disconnect() async {
     await disableMicrophone();
-    _room?.unregisterTextStreamHandler('lk.transcription');
+    _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
+    _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
     await _room?.disconnect();
     _room?.removeListener(_onRoomEvent);
     _room = null;
@@ -156,8 +183,10 @@ class LiveKitService {
     try {
       final text = await reader.readAll();
       final info = reader.info;
-      final isFinal = info?.attributes['lk.transcription_final'] == 'true';
-      final segmentId = info?.attributes['lk.segment_id'] ?? info?.id ?? '';
+      final isFinal =
+          info?.attributes[LiveKitAttributes.transcriptionFinal] == 'true';
+      final segmentId =
+          info?.attributes[LiveKitAttributes.segmentId] ?? info?.id ?? '';
 
       _log.fine('Transcription from $participantId: $text (final: $isFinal)');
 
@@ -172,6 +201,32 @@ class LiveKitService {
     } catch (e) {
       _log.warning('Error processing transcription: $e');
     }
+  }
+
+  void _onImmediateText(TextStreamReader reader, String participantId) {
+    final info = reader.info;
+    final segmentId =
+        info?.attributes[LiveKitAttributes.segmentId] ?? info?.id ?? '';
+
+    reader.listen(
+      (chunk) {
+        try {
+          final text = utf8.decode(chunk.content.toList());
+          _log.fine('Chunk from $participantId: "$text"');
+
+          _immediateTextController.add(
+            ImmediateTextEvent(
+              segmentId: segmentId,
+              text: text,
+              participantId: participantId,
+            ),
+          );
+        } catch (e) {
+          _log.warning('Error decoding chunk: $e');
+        }
+      },
+      onError: (e) => _log.warning('Error in immediate text stream: $e'),
+    );
   }
 
   Future<String?> enableMicrophone() async {
@@ -213,5 +268,6 @@ class LiveKitService {
     _connectionStatusController.close();
     _audioTrackIdController.close();
     _transcriptionController.close();
+    _immediateTextController.close();
   }
 }
