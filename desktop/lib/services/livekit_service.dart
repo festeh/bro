@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:livekit_client/livekit_client.dart';
 import 'package:logging/logging.dart';
@@ -114,7 +113,7 @@ class LiveKitService {
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
   bool get isConnected => _room?.connectionState == ConnectionState.connected;
-  bool get isMicrophoneEnabled => _audioTrack != null;
+  bool get isVoiceSessionActive => _audioTrack != null;
   SttProvider get sttProvider => _sttProvider;
   LlmModel get llmModel => _llmModel;
   AgentMode get agentMode => _agentMode;
@@ -173,7 +172,7 @@ class LiveKitService {
   }
 
   Future<void> disconnect() async {
-    await disableMicrophone();
+    await stopVoiceSession();
     _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
     _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
     _room?.unregisterTextStreamHandler(LiveKitTopics.vadStatus);
@@ -315,15 +314,17 @@ class LiveKitService {
     }
   }
 
-  Future<String?> enableMicrophone() async {
+  Future<String?> startVoiceSession() async {
     if (_room == null || !isConnected) {
       throw Exception('Not connected to room');
     }
 
     if (_audioTrack != null) {
+      _log.warning('Voice session already active');
       return _audioTrack!.sid;
     }
 
+    _log.info('Starting voice session');
     await _room!.localParticipant?.setMicrophoneEnabled(true);
 
     // Get the audio track after enabling
@@ -331,18 +332,33 @@ class LiveKitService {
     if (publications != null && publications.isNotEmpty) {
       _audioTrack = publications.first.track;
       _audioTrackIdController.add(_audioTrack?.sid);
+      _log.info('Voice session started, track: ${_audioTrack?.sid}');
       return _audioTrack?.sid;
     }
 
+    _log.warning('Voice session started but no audio track found');
     return null;
   }
 
-  Future<void> disableMicrophone() async {
-    if (_room == null) return;
+  Future<void> stopVoiceSession() async {
+    if (_room == null) {
+      _log.warning('Cannot stop voice session: not connected');
+      return;
+    }
 
-    await _room!.localParticipant?.setMicrophoneEnabled(false);
+    _log.info('Stopping voice session');
+
+    // Must unpublish track (not just mute) to trigger track_unsubscribed on agent
+    final track = _audioTrack;
+    final trackSid = track?.sid;
+    if (trackSid != null) {
+      await _room!.localParticipant?.removePublishedTrack(trackSid);
+      _log.info('Audio track unpublished: $trackSid');
+    }
+
     _audioTrack = null;
     _audioTrackIdController.add(null);
+    _log.info('Voice session stopped');
   }
 
   void _onRoomEvent() {

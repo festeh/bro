@@ -141,8 +141,8 @@ class _ChatPageState extends State<ChatPage> {
     } else if (event.type == SessionNotificationType.sessionWarning) {
       setState(() => _isSessionWarning = true);
     } else if (event.type == SessionNotificationType.sessionTimeout) {
-      _log.info('Session timeout, disabling mic');
-      widget.liveKitService.disableMicrophone();
+      _log.info('Session timeout');
+      widget.liveKitService.stopVoiceSession();
       setState(() {
         _isSessionActive = false;
         _isSessionLoading = false;
@@ -221,7 +221,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _toggleSession() async {
     if (_isSessionActive || _isSessionLoading) {
       // Stop session
-      await widget.liveKitService.disableMicrophone();
+      await widget.liveKitService.stopVoiceSession();
       setState(() {
         _isSessionActive = false;
         _isSessionLoading = false;
@@ -231,10 +231,10 @@ class _ChatPageState extends State<ChatPage> {
       // Start session - show loading, wait for session_ready notification
       setState(() => _isSessionLoading = true);
       try {
-        await widget.liveKitService.enableMicrophone();
+        await widget.liveKitService.startVoiceSession();
         // Don't set _isSessionActive yet - wait for session_ready notification
       } catch (e, st) {
-        _log.severe('Failed to enable microphone', e, st);
+        _log.severe('Failed to start voice session', e, st);
         setState(() => _isSessionLoading = false);
       }
     }

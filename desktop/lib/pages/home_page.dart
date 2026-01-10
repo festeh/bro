@@ -165,7 +165,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _startRecording() async {
     // Enable microphone first
-    final trackId = await widget.liveKitService.enableMicrophone();
+    final trackId = await widget.liveKitService.startVoiceSession();
     if (trackId == null) {
       throw Exception('Failed to enable microphone');
     }
@@ -222,7 +222,7 @@ class _HomePageState extends State<HomePage> {
       await widget.storageService.addRecording(recording);
     }
 
-    await widget.liveKitService.disableMicrophone();
+    await widget.liveKitService.stopVoiceSession();
 
     setState(() {
       _isRecording = false;
