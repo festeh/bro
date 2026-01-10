@@ -5,12 +5,14 @@ import '../theme/tokens.dart';
 class RecordButton extends StatefulWidget {
   final bool isRecording;
   final bool isLoading;
+  final bool isWarning;
   final VoidCallback? onPressed;
 
   const RecordButton({
     super.key,
     required this.isRecording,
     this.isLoading = false,
+    this.isWarning = false,
     this.onPressed,
   });
 
@@ -43,6 +45,14 @@ class _RecordButtonState extends State<RecordButton>
   @override
   void didUpdateWidget(RecordButton oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Adjust animation speed based on warning state
+    if (widget.isWarning && !oldWidget.isWarning) {
+      _pulseController.duration = const Duration(milliseconds: 400);
+    } else if (!widget.isWarning && oldWidget.isWarning) {
+      _pulseController.duration = const Duration(milliseconds: 1000);
+    }
+
     if (widget.isRecording && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
     } else if (!widget.isRecording && _pulseController.isAnimating) {
@@ -74,17 +84,20 @@ class _RecordButtonState extends State<RecordButton>
           width: AppTokens.recordButtonSize,
           height: AppTokens.recordButtonSize,
           decoration: BoxDecoration(
-            color: widget.isRecording
-                ? AppTokens.accentRecording
-                : AppTokens.accentPrimary,
+            color: widget.isWarning
+                ? AppTokens.accentWarning
+                : widget.isRecording
+                    ? AppTokens.accentRecording
+                    : AppTokens.accentPrimary,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color:
-                    (widget.isRecording
+                color: (widget.isWarning
+                        ? AppTokens.accentWarning
+                        : widget.isRecording
                             ? AppTokens.accentRecording
                             : AppTokens.accentPrimary)
-                        .withValues(alpha: 0.4),
+                    .withValues(alpha: 0.4),
                 blurRadius: 16,
                 spreadRadius: 2,
               ),

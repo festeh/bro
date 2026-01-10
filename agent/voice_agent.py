@@ -30,11 +30,11 @@ from constants import ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL, TOPIC_LLM_STREA
 
 load_dotenv()
 
-# Turn duration limits
-MAX_TURN_DURATION = 60.0  # seconds
-TURN_WARNING_THRESHOLD = 55.0  # seconds
+# Session inactivity timeout
+SESSION_TIMEOUT = 60.0  # seconds without completed turn
+SESSION_WARNING_THRESHOLD = 55.0  # seconds
 
-NotificationType = Literal["turn_warning", "turn_terminated"]
+NotificationType = Literal["session_warning", "session_timeout", "session_ready"]
 
 logger = logging.getLogger("voice-agent")
 
@@ -88,11 +88,11 @@ class ChatAgent(Agent):
         self._room: rtc.Room | None = None
         self._immediate_writer: rtc.TextStreamWriter | None = None
         self._segment_id: str = ""
-        # Turn duration tracking
-        self._turn_id: str | None = None
-        self._turn_start_time: float | None = None
-        self._turn_warning_sent: bool = False
-        self._turn_monitor_task: asyncio.Task | None = None
+        # Session inactivity timeout
+        self._session_id: str = ""
+        self._last_activity_time: float | None = None
+        self._session_warning_sent: bool = False
+        self._session_monitor_task: asyncio.Task | None = None
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -138,13 +138,13 @@ class ChatAgent(Agent):
             await self._immediate_writer.aclose()
             self._immediate_writer = None
 
-    async def _send_turn_notification(self, msg_type: NotificationType, **payload) -> None:
-        """Send turn notification to frontend via LiveKit data topic."""
+    async def _send_session_notification(self, msg_type: NotificationType, **payload) -> None:
+        """Send session notification to frontend via LiveKit data topic."""
         if not self._room:
             return
         msg = json.dumps({
             "type": msg_type,
-            "turn_id": self._turn_id,
+            "session_id": self._session_id,
             "timestamp": time.time(),
             **payload,
         })
@@ -152,51 +152,58 @@ class ChatAgent(Agent):
             writer = await self._room.local_participant.stream_text(topic=TOPIC_VAD_STATUS)
             await writer.write(msg)
             await writer.aclose()
-            logger.debug(f"Turn notification sent: {msg_type} turn={self._turn_id}")
+            logger.debug(f"Session notification sent: {msg_type}")
         except Exception as e:
-            logger.warning(f"Failed to send turn notification: {e}")
+            logger.warning(f"Failed to send session notification: {e}")
 
-    def on_speech_start(self) -> None:
-        """Called when user starts speaking."""
-        self._turn_id = f"turn_{uuid.uuid4().hex[:8]}"
-        self._turn_warning_sent = False
-        self._turn_start_time = time.time()
-        self._turn_monitor_task = asyncio.create_task(self._monitor_turn_duration())
-        logger.debug(f"Speech started: turn={self._turn_id}")
+    def start_session_timer(self) -> None:
+        """Start session inactivity timer when audio track is subscribed."""
+        self._session_id = f"session_{uuid.uuid4().hex[:8]}"
+        self._last_activity_time = time.time()
+        self._session_warning_sent = False
+        if self._session_monitor_task:
+            self._session_monitor_task.cancel()
+        self._session_monitor_task = asyncio.create_task(self._monitor_session_timeout())
+        logger.info(f"Session timer started: {self._session_id}")
 
-    def on_speech_end(self) -> None:
-        """Called when user stops speaking."""
-        if self._turn_monitor_task:
-            self._turn_monitor_task.cancel()
-            self._turn_monitor_task = None
-        self._turn_warning_sent = False
-        logger.debug(f"Speech ended: turn={self._turn_id}")
+    def stop_session_timer(self) -> None:
+        """Stop session timer when audio track is unsubscribed."""
+        if self._session_monitor_task:
+            self._session_monitor_task.cancel()
+            self._session_monitor_task = None
+        logger.info(f"Session timer stopped: {self._session_id}")
 
-    async def _monitor_turn_duration(self) -> None:
-        """Background task to monitor turn duration and enforce limits."""
+    def on_turn_completed(self) -> None:
+        """Reset inactivity timer when user completes a turn."""
+        self._last_activity_time = time.time()
+        self._session_warning_sent = False
+        logger.debug(f"Turn completed, timer reset: {self._session_id}")
+
+    async def _monitor_session_timeout(self) -> None:
+        """Background task to monitor session inactivity and enforce timeout."""
         try:
             while True:
                 await asyncio.sleep(0.5)
-                if not self._turn_start_time:
+                if not self._last_activity_time:
                     break
 
-                elapsed = time.time() - self._turn_start_time
+                elapsed = time.time() - self._last_activity_time
 
-                # Send warning at 55s
-                if elapsed >= TURN_WARNING_THRESHOLD and not self._turn_warning_sent:
-                    remaining = int(MAX_TURN_DURATION - elapsed)
-                    await self._send_turn_notification("turn_warning", remaining_seconds=remaining)
-                    self._turn_warning_sent = True
-                    logger.info(f"Turn warning: {remaining}s remaining turn={self._turn_id}")
+                # Send warning at 55s of inactivity
+                if elapsed >= SESSION_WARNING_THRESHOLD and not self._session_warning_sent:
+                    remaining = int(SESSION_TIMEOUT - elapsed)
+                    await self._send_session_notification("session_warning", remaining_seconds=remaining)
+                    self._session_warning_sent = True
+                    logger.info(f"Session warning: {remaining}s remaining")
 
-                # Terminate at 60s
-                if elapsed >= MAX_TURN_DURATION:
-                    await self._send_turn_notification(
-                        "turn_terminated",
-                        reason="max_duration",
-                        final_duration=elapsed,
+                # Timeout at 60s of inactivity
+                if elapsed >= SESSION_TIMEOUT:
+                    await self._send_session_notification(
+                        "session_timeout",
+                        reason="inactivity",
+                        idle_duration=elapsed,
                     )
-                    logger.info(f"Turn terminated: duration={elapsed:.2f}s turn={self._turn_id}")
+                    logger.info(f"Session timeout after {elapsed:.1f}s of inactivity")
                     break
         except asyncio.CancelledError:
             pass
@@ -289,17 +296,75 @@ async def entrypoint(ctx: JobContext):
             f"latency={m.duration:.2f}s streamed={m.streamed}"
         )
 
+    async def _start_session():
+        """Start agent session when user enables mic."""
+        nonlocal session
+        agent = create_agent(current_settings[0])
+        await session.start(
+            agent=agent,
+            room=ctx.room,
+            room_options=room_io.RoomOptions(
+                text_output=True,
+                audio_output=(current_settings[0]["agent_mode"] == "chat"),
+            ),
+        )
+        session.on("user_state_changed", on_user_state_changed)
+        if session.stt:
+            session.stt.on("metrics_collected", on_stt_metrics)
+
+        # Start session timer and notify frontend
+        if agent and isinstance(agent, ChatAgent):
+            agent.start_session_timer()
+            await agent._send_session_notification("session_ready")
+
+    async def _stop_session():
+        """Stop agent session when user disables mic."""
+        nonlocal session
+        agent = current_agent[0]
+        if agent and isinstance(agent, ChatAgent):
+            agent.stop_session_timer()
+
+        await session.aclose()
+        # Recreate session for next connection
+        session = AgentSession(
+            vad=ctx.proc.userdata["vad"],
+            turn_detection=MultilingualModel(),
+            preemptive_generation=True,
+        )
+        current_agent[0] = None
+
+    @ctx.room.on("track_subscribed")
+    def on_track_subscribed(
+        track: rtc.Track,
+        publication: rtc.TrackPublication,
+        participant: rtc.RemoteParticipant,
+    ):
+        """Start agent session when user's audio track is subscribed."""
+        if track.kind == rtc.TrackKind.KIND_AUDIO:
+            logger.info(f"Audio track subscribed from {participant.identity}")
+            asyncio.create_task(_start_session())
+
+    @ctx.room.on("track_unsubscribed")
+    def on_track_unsubscribed(
+        track: rtc.Track,
+        publication: rtc.TrackPublication,
+        participant: rtc.RemoteParticipant,
+    ):
+        """Stop agent session when user's audio track is unsubscribed."""
+        if track.kind == rtc.TrackKind.KIND_AUDIO:
+            logger.info(f"Audio track unsubscribed from {participant.identity}")
+            asyncio.create_task(_stop_session())
+
     def on_user_state_changed(ev: UserStateChangedEvent):
-        """Track turn timing for duration limits."""
+        """Reset inactivity timer when user completes a turn."""
         logger.debug(f"User state changed: {ev.old_state} -> {ev.new_state}")
         agent = current_agent[0]
         if not agent or not isinstance(agent, ChatAgent):
             return
 
-        if ev.new_state == "speaking" and ev.old_state != "speaking":
-            agent.on_speech_start()
-        elif ev.old_state == "speaking" and ev.new_state != "speaking":
-            agent.on_speech_end()
+        # Reset timer when user finishes speaking (turn completed)
+        if ev.old_state == "speaking" and ev.new_state != "speaking":
+            agent.on_turn_completed()
 
     def create_agent(s: dict) -> Agent:
         """Create agent based on current settings."""
@@ -367,18 +432,8 @@ async def entrypoint(ctx: JobContext):
             except json.JSONDecodeError:
                 pass
 
-    agent = create_agent(settings)
-    await session.start(
-        agent=agent,
-        room=ctx.room,
-        room_options=room_io.RoomOptions(
-            text_output=True,
-            audio_output=(settings["agent_mode"] == "chat"),
-        ),
-    )
-    session.on("user_state_changed", on_user_state_changed)
-    if session.stt:
-        session.stt.on("metrics_collected", on_stt_metrics)
+    # Session will be started when audio track is subscribed (user enables mic)
+    logger.info("Agent ready, waiting for audio track subscription")
 
 
 if __name__ == "__main__":

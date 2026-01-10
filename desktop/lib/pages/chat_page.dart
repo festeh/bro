@@ -29,7 +29,9 @@ class _ChatPageState extends State<ChatPage> {
 
   List<ChatMessage> _messages = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
-  bool _isMicEnabled = false;
+  bool _isSessionActive = false;
+  bool _isSessionLoading = false;
+  bool _isSessionWarning = false;
 
   // Live user message state
   String _liveUserText = '';
@@ -42,6 +44,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<ConnectionStatus>? _connectionSub;
   StreamSubscription<TranscriptionEvent>? _transcriptionSub;
   StreamSubscription<ImmediateTextEvent>? _immediateTextSub;
+  StreamSubscription<SessionNotificationEvent>? _sessionNotificationSub;
 
   @override
   void initState() {
@@ -60,6 +63,9 @@ class _ChatPageState extends State<ChatPage> {
 
     _immediateTextSub =
         widget.liveKitService.immediateTextStream.listen(_onImmediateText);
+
+    _sessionNotificationSub =
+        widget.liveKitService.sessionNotificationStream.listen(_onSessionNotification);
 
     _connectionStatus = widget.liveKitService.isConnected
         ? ConnectionStatus.connected
@@ -104,7 +110,8 @@ class _ChatPageState extends State<ChatPage> {
         }
         _liveUserText = _accumulatedFinals;
 
-        // User turn is complete - finalize and show agent thinking
+        // User turn is complete - reset warning and finalize
+        _isSessionWarning = false;
         _finalizeUserMessage();
         _pendingAssistantMessage = ''; // Empty = show "..." thinking indicator
       } else {
@@ -118,6 +125,30 @@ class _ChatPageState extends State<ChatPage> {
     });
 
     _scrollToBottom();
+  }
+
+  void _onSessionNotification(SessionNotificationEvent event) {
+    if (!mounted) return;
+
+    _log.info('Session notification: ${event.type} remaining=${event.remainingSeconds} idle=${event.idleDuration}');
+
+    if (event.type == SessionNotificationType.sessionReady) {
+      _log.info('Session ready, activating');
+      setState(() {
+        _isSessionLoading = false;
+        _isSessionActive = true;
+      });
+    } else if (event.type == SessionNotificationType.sessionWarning) {
+      setState(() => _isSessionWarning = true);
+    } else if (event.type == SessionNotificationType.sessionTimeout) {
+      _log.info('Session timeout, disabling mic');
+      widget.liveKitService.disableMicrophone();
+      setState(() {
+        _isSessionActive = false;
+        _isSessionLoading = false;
+        _isSessionWarning = false;
+      });
+    }
   }
 
   void _onImmediateText(ImmediateTextEvent event) {
@@ -187,16 +218,24 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> _toggleMic() async {
-    if (_isMicEnabled) {
+  Future<void> _toggleSession() async {
+    if (_isSessionActive || _isSessionLoading) {
+      // Stop session
       await widget.liveKitService.disableMicrophone();
-      setState(() => _isMicEnabled = false);
+      setState(() {
+        _isSessionActive = false;
+        _isSessionLoading = false;
+        _isSessionWarning = false;
+      });
     } else {
+      // Start session - show loading, wait for session_ready notification
+      setState(() => _isSessionLoading = true);
       try {
         await widget.liveKitService.enableMicrophone();
-        setState(() => _isMicEnabled = true);
+        // Don't set _isSessionActive yet - wait for session_ready notification
       } catch (e, st) {
         _log.severe('Failed to enable microphone', e, st);
+        setState(() => _isSessionLoading = false);
       }
     }
   }
@@ -217,6 +256,7 @@ class _ChatPageState extends State<ChatPage> {
     _connectionSub?.cancel();
     _transcriptionSub?.cancel();
     _immediateTextSub?.cancel();
+    _sessionNotificationSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -275,10 +315,11 @@ class _ChatPageState extends State<ChatPage> {
               ),
               const SizedBox(width: AppTokens.spacingMd),
               RecordButton(
-                isRecording: _isMicEnabled,
-                isLoading: false,
+                isRecording: _isSessionActive,
+                isLoading: _isSessionLoading,
+                isWarning: _isSessionWarning,
                 onPressed: _connectionStatus == ConnectionStatus.connected
-                    ? _toggleMic
+                    ? _toggleSession
                     : null,
               ),
             ],

@@ -138,8 +138,8 @@ lk-egress:
 lk-redis-stop:
     docker stop bro-redis && docker rm bro-redis
 
-# Start all backend services with pm2 (redis, livekit, egress, agent)
-backend:
+# Start all services with pm2 (redis, livekit, egress, agent)
+run:
     pm2 start ecosystem.config.cjs
 
 # View logs for a specific process (e.g., just logs agent)

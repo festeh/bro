@@ -10,6 +10,7 @@ abstract class AppTokens {
   // Colors - Accent
   static const Color accentPrimary = Color(0xFF3B82F6);
   static const Color accentRecording = Color(0xFFEF4444);
+  static const Color accentWarning = Color(0xFFF59E0B);
   static const Color accentSuccess = Color(0xFF22C55E);
 
   // Colors - Text

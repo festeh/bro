@@ -45,36 +45,36 @@ class ImmediateTextEvent {
   });
 }
 
-/// Turn notification event types
-enum TurnNotificationType { turnWarning, turnTerminated }
+/// Session notification event types
+enum SessionNotificationType { sessionWarning, sessionTimeout, sessionReady }
 
-/// Turn notification from agent
-class TurnNotificationEvent {
-  final TurnNotificationType type;
-  final String turnId;
+/// Session notification from agent
+class SessionNotificationEvent {
+  final SessionNotificationType type;
+  final String sessionId;
   final Map<String, dynamic> payload;
   final String participantId;
 
-  TurnNotificationEvent({
+  SessionNotificationEvent({
     required this.type,
-    required this.turnId,
+    required this.sessionId,
     required this.payload,
     required this.participantId,
   });
 
   int? get remainingSeconds =>
-      type == TurnNotificationType.turnWarning
+      type == SessionNotificationType.sessionWarning
           ? payload['remaining_seconds'] as int?
           : null;
 
   String? get reason =>
-      type == TurnNotificationType.turnTerminated
+      type == SessionNotificationType.sessionTimeout
           ? payload['reason'] as String?
           : null;
 
-  double? get finalDuration =>
-      type == TurnNotificationType.turnTerminated
-          ? (payload['final_duration'] as num?)?.toDouble()
+  double? get idleDuration =>
+      type == SessionNotificationType.sessionTimeout
+          ? (payload['idle_duration'] as num?)?.toDouble()
           : null;
 }
 
@@ -98,8 +98,8 @@ class LiveKitService {
       StreamController<TranscriptionEvent>.broadcast();
   final _immediateTextController =
       StreamController<ImmediateTextEvent>.broadcast();
-  final _turnNotificationController =
-      StreamController<TurnNotificationEvent>.broadcast();
+  final _sessionNotificationController =
+      StreamController<SessionNotificationEvent>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
@@ -108,8 +108,8 @@ class LiveKitService {
       _transcriptionController.stream;
   Stream<ImmediateTextEvent> get immediateTextStream =>
       _immediateTextController.stream;
-  Stream<TurnNotificationEvent> get turnNotificationStream =>
-      _turnNotificationController.stream;
+  Stream<SessionNotificationEvent> get sessionNotificationStream =>
+      _sessionNotificationController.stream;
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
@@ -159,7 +159,7 @@ class LiveKitService {
       );
       _room!.registerTextStreamHandler(
         LiveKitTopics.vadStatus,
-        _onTurnNotification,
+        _onSessionNotification,
       );
 
       // Set initial STT provider in metadata
@@ -271,7 +271,7 @@ class LiveKitService {
     );
   }
 
-  void _onTurnNotification(TextStreamReader reader, String participantId) async {
+  void _onSessionNotification(TextStreamReader reader, String participantId) async {
     try {
       final text = await reader.readAll();
       final json = jsonDecode(text) as Map<String, dynamic>;
@@ -279,36 +279,39 @@ class LiveKitService {
       final typeStr = json['type'] as String?;
       if (typeStr == null) return;
 
-      TurnNotificationType? type;
+      SessionNotificationType? type;
       switch (typeStr) {
-        case 'turn_warning':
-          type = TurnNotificationType.turnWarning;
+        case 'session_warning':
+          type = SessionNotificationType.sessionWarning;
           break;
-        case 'turn_terminated':
-          type = TurnNotificationType.turnTerminated;
+        case 'session_timeout':
+          type = SessionNotificationType.sessionTimeout;
+          break;
+        case 'session_ready':
+          type = SessionNotificationType.sessionReady;
           break;
         default:
-          _log.warning('Unknown turn notification type: $typeStr');
+          _log.warning('Unknown session notification type: $typeStr');
           return;
       }
 
-      final turnId = json['turn_id'] as String? ?? '';
+      final sessionId = json['session_id'] as String? ?? '';
       final payload = Map<String, dynamic>.from(json)
         ..remove('type')
-        ..remove('turn_id');
+        ..remove('session_id');
 
-      _log.info('Turn notification: $typeStr turn=$turnId');
+      _log.info('Session notification: $typeStr session=$sessionId payload=$payload');
 
-      _turnNotificationController.add(
-        TurnNotificationEvent(
+      _sessionNotificationController.add(
+        SessionNotificationEvent(
           type: type,
-          turnId: turnId,
+          sessionId: sessionId,
           payload: payload,
           participantId: participantId,
         ),
       );
     } catch (e) {
-      _log.warning('Error processing turn notification: $e');
+      _log.warning('Error processing session notification: $e');
     }
   }
 
@@ -352,6 +355,6 @@ class LiveKitService {
     _audioTrackIdController.close();
     _transcriptionController.close();
     _immediateTextController.close();
-    _turnNotificationController.close();
+    _sessionNotificationController.close();
   }
 }
