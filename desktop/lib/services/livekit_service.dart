@@ -45,6 +45,39 @@ class ImmediateTextEvent {
   });
 }
 
+/// VAD notification event types
+enum VADNotificationType { turnWarning, turnTerminated, asrConnectionFailed }
+
+/// VAD gating notification from agent
+class VADNotificationEvent {
+  final VADNotificationType type;
+  final String turnId;
+  final Map<String, dynamic> payload;
+  final String participantId;
+
+  VADNotificationEvent({
+    required this.type,
+    required this.turnId,
+    required this.payload,
+    required this.participantId,
+  });
+
+  int? get remainingSeconds =>
+      type == VADNotificationType.turnWarning
+          ? payload['remaining_seconds'] as int?
+          : null;
+
+  String? get reason =>
+      type == VADNotificationType.turnTerminated
+          ? payload['reason'] as String?
+          : null;
+
+  double? get finalDuration =>
+      type == VADNotificationType.turnTerminated
+          ? (payload['final_duration'] as num?)?.toDouble()
+          : null;
+}
+
 class LiveKitService {
   static const String _wsUrl = 'ws://localhost:7880';
   static const String _roomName = 'voice-recorder';
@@ -65,6 +98,8 @@ class LiveKitService {
       StreamController<TranscriptionEvent>.broadcast();
   final _immediateTextController =
       StreamController<ImmediateTextEvent>.broadcast();
+  final _vadNotificationController =
+      StreamController<VADNotificationEvent>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
@@ -73,6 +108,8 @@ class LiveKitService {
       _transcriptionController.stream;
   Stream<ImmediateTextEvent> get immediateTextStream =>
       _immediateTextController.stream;
+  Stream<VADNotificationEvent> get vadNotificationStream =>
+      _vadNotificationController.stream;
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
@@ -120,6 +157,10 @@ class LiveKitService {
         LiveKitTopics.llmStream,
         _onImmediateText,
       );
+      _room!.registerTextStreamHandler(
+        LiveKitTopics.vadStatus,
+        _onVadNotification,
+      );
 
       // Set initial STT provider in metadata
       _updateMetadata();
@@ -135,6 +176,7 @@ class LiveKitService {
     await disableMicrophone();
     _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
     _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
+    _room?.unregisterTextStreamHandler(LiveKitTopics.vadStatus);
     await _room?.disconnect();
     _room?.removeListener(_onRoomEvent);
     _room = null;
@@ -229,6 +271,50 @@ class LiveKitService {
     );
   }
 
+  void _onVadNotification(TextStreamReader reader, String participantId) async {
+    try {
+      final text = await reader.readAll();
+      final json = jsonDecode(text) as Map<String, dynamic>;
+
+      final typeStr = json['type'] as String?;
+      if (typeStr == null) return;
+
+      VADNotificationType? type;
+      switch (typeStr) {
+        case 'turn_warning':
+          type = VADNotificationType.turnWarning;
+          break;
+        case 'turn_terminated':
+          type = VADNotificationType.turnTerminated;
+          break;
+        case 'asr_connection_failed':
+          type = VADNotificationType.asrConnectionFailed;
+          break;
+        default:
+          _log.warning('Unknown VAD notification type: $typeStr');
+          return;
+      }
+
+      final turnId = json['turn_id'] as String? ?? '';
+      final payload = Map<String, dynamic>.from(json)
+        ..remove('type')
+        ..remove('turn_id');
+
+      _log.info('VAD notification: $typeStr turn=$turnId');
+
+      _vadNotificationController.add(
+        VADNotificationEvent(
+          type: type,
+          turnId: turnId,
+          payload: payload,
+          participantId: participantId,
+        ),
+      );
+    } catch (e) {
+      _log.warning('Error processing VAD notification: $e');
+    }
+  }
+
   Future<String?> enableMicrophone() async {
     if (_room == null || !isConnected) {
       throw Exception('Not connected to room');
@@ -269,5 +355,6 @@ class LiveKitService {
     _audioTrackIdController.close();
     _transcriptionController.close();
     _immediateTextController.close();
+    _vadNotificationController.close();
   }
 }
