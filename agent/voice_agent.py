@@ -4,13 +4,13 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncIterable
 from dataclasses import dataclass
-from typing import AsyncIterable, Literal
+from typing import Literal, cast
 
 import numpy as np
 from dotenv import load_dotenv
 from livekit import rtc
-
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -24,12 +24,11 @@ from livekit.agents import (
     metrics,
     room_io,
 )
-from livekit.agents.voice import UserStateChangedEvent
-from livekit.agents.voice import ModelSettings
+from livekit.agents.voice import ModelSettings, UserStateChangedEvent
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from constants import TOPIC_LLM_STREAM, TOPIC_VAD_STATUS, ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL
+from constants import ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL, TOPIC_LLM_STREAM, TOPIC_VAD_STATUS
 
 load_dotenv()
 
@@ -152,9 +151,12 @@ class ChatAgent(Agent):
         self._segment_id: str = ""
         # VAD gating state
         self._vad_config = VADGatingConfig()
+        asr_provider: ASRProvider = (
+            cast(ASRProvider, stt_provider) if stt_provider in ("deepgram", "elevenlabs") else "deepgram"
+        )
         self._vad_state = VADGatingState(
             session_id=uuid.uuid4().hex,
-            asr_provider=stt_provider if stt_provider in ("deepgram", "elevenlabs") else "deepgram",
+            asr_provider=asr_provider,
         )
         self._vad_metrics = VADGatingMetrics(
             session_id=self._vad_state.session_id,
@@ -318,8 +320,8 @@ class TranscribeAgent(Agent):
         )
 
     async def on_user_turn_completed(
-        self, chat_ctx: llm.ChatContext, new_message: llm.ChatMessage
-    ):
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
         transcript = new_message.text_content
         logger.info(f"Transcribed: {transcript}")
         raise StopResponse()
@@ -435,7 +437,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"User state changed: {ev.old_state} -> {ev.new_state}")
         agent = current_agent[0]
         if not agent or not isinstance(agent, ChatAgent):
-            logger.warning(f"No ChatAgent available for state change")
+            logger.warning("No ChatAgent available for state change")
             return
 
         if ev.new_state == "speaking" and ev.old_state != "speaking":
@@ -487,7 +489,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"Settings changed: {old} -> {new_settings}")
         current_settings[0] = new_settings.copy()
 
-        await session.close()
+        await session.aclose()
         session = AgentSession(
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),

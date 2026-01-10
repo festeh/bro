@@ -12,3 +12,32 @@ dependencies = [
     "livekit-plugins-turn-detector",
     "python-dotenv",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "ty>=0.0.1",
+]
+
+# Commands:
+#   uv run ruff check .        - lint
+#   uv run ruff check . --fix  - auto-fix
+#   uv run ruff format .       - format
+#   uv run ty check .          - typecheck
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["F", "E", "B", "I", "UP", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+exclude = [".venv"]
