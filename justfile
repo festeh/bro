@@ -203,7 +203,23 @@ agent:
 
 # Sync agent dependencies
 agent-deps:
-    cd agent && uv sync
+    cd agent && uv sync --group dev
+
+# Lint agent code
+agent-lint:
+    cd agent && uv run ruff check .
+
+# Auto-fix agent lint issues
+agent-fix:
+    cd agent && uv run ruff check . --fix
+
+# Type check agent code
+agent-typecheck:
+    cd agent && uv run ty check .
+
+# Run all agent checks (lint + typecheck)
+agent-check:
+    cd agent && uv run ruff check . && uv run ty check .
 
 # ─────────────────────────────────────────────────────────────
 # AI Server
