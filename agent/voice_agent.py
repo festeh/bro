@@ -18,6 +18,7 @@ from livekit.agents import (
     StopResponse,
     cli,
     llm,
+    metrics,
     room_io,
 )
 from livekit.agents.voice import ModelSettings
@@ -204,6 +205,14 @@ async def entrypoint(ctx: JobContext):
 
     current_settings = [settings.copy()]
 
+    def on_stt_metrics(m: metrics.STTMetrics):
+        """Log STT metrics including provider and audio duration."""
+        provider = current_settings[0]["stt_provider"]
+        logger.info(
+            f"STT call: provider={provider} audio_duration={m.audio_duration:.2f}s "
+            f"latency={m.duration:.2f}s streamed={m.streamed}"
+        )
+
     def create_agent(s: dict) -> Agent:
         """Create agent based on current settings."""
         if s["agent_mode"] == "chat":
@@ -249,6 +258,9 @@ async def entrypoint(ctx: JobContext):
                 audio_output=(new_settings["agent_mode"] == "chat"),
             ),
         )
+        # Register STT metrics handler
+        if session.stt:
+            session.stt.on("metrics_collected", on_stt_metrics)
 
     @ctx.room.on("participant_metadata_changed")
     def on_metadata_changed(participant, prev_metadata):
@@ -275,6 +287,9 @@ async def entrypoint(ctx: JobContext):
             audio_output=(settings["agent_mode"] == "chat"),
         ),
     )
+    # Register STT metrics handler
+    if session.stt:
+        session.stt.on("metrics_collected", on_stt_metrics)
 
 
 if __name__ == "__main__":

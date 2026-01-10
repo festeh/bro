@@ -94,15 +94,31 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
                 try:
                     chunk_count = 0
+                    conversation_ended = False
                     async for chunk in stream_response(
                         app_graph, thread_id, content, provider
                     ):
-                        await websocket.send_json({"type": "chunk", "content": chunk})
-                        chunk_count += 1
+                        if isinstance(chunk, dict):
+                            # Special event (e.g., conversation_ended)
+                            await websocket.send_json(chunk)
+                            if chunk.get("type") == "conversation_ended":
+                                conversation_ended = True
+                        else:
+                            await websocket.send_json(
+                                {"type": "chunk", "content": chunk}
+                            )
+                            chunk_count += 1
 
                     await websocket.send_json(
                         {"type": "done", "message_id": message_id}
                     )
+
+                    if conversation_ended:
+                        ws_log.info(
+                            "conversation_ended",
+                            thread_id=thread_id,
+                            message_id=message_id,
+                        )
                     ws_log.info(
                         "response_complete",
                         thread_id=thread_id,
