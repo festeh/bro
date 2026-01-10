@@ -45,17 +45,17 @@ class ImmediateTextEvent {
   });
 }
 
-/// VAD notification event types
-enum VADNotificationType { turnWarning, turnTerminated, asrConnectionFailed }
+/// Turn notification event types
+enum TurnNotificationType { turnWarning, turnTerminated }
 
-/// VAD gating notification from agent
-class VADNotificationEvent {
-  final VADNotificationType type;
+/// Turn notification from agent
+class TurnNotificationEvent {
+  final TurnNotificationType type;
   final String turnId;
   final Map<String, dynamic> payload;
   final String participantId;
 
-  VADNotificationEvent({
+  TurnNotificationEvent({
     required this.type,
     required this.turnId,
     required this.payload,
@@ -63,17 +63,17 @@ class VADNotificationEvent {
   });
 
   int? get remainingSeconds =>
-      type == VADNotificationType.turnWarning
+      type == TurnNotificationType.turnWarning
           ? payload['remaining_seconds'] as int?
           : null;
 
   String? get reason =>
-      type == VADNotificationType.turnTerminated
+      type == TurnNotificationType.turnTerminated
           ? payload['reason'] as String?
           : null;
 
   double? get finalDuration =>
-      type == VADNotificationType.turnTerminated
+      type == TurnNotificationType.turnTerminated
           ? (payload['final_duration'] as num?)?.toDouble()
           : null;
 }
@@ -98,8 +98,8 @@ class LiveKitService {
       StreamController<TranscriptionEvent>.broadcast();
   final _immediateTextController =
       StreamController<ImmediateTextEvent>.broadcast();
-  final _vadNotificationController =
-      StreamController<VADNotificationEvent>.broadcast();
+  final _turnNotificationController =
+      StreamController<TurnNotificationEvent>.broadcast();
 
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
@@ -108,8 +108,8 @@ class LiveKitService {
       _transcriptionController.stream;
   Stream<ImmediateTextEvent> get immediateTextStream =>
       _immediateTextController.stream;
-  Stream<VADNotificationEvent> get vadNotificationStream =>
-      _vadNotificationController.stream;
+  Stream<TurnNotificationEvent> get turnNotificationStream =>
+      _turnNotificationController.stream;
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
@@ -159,7 +159,7 @@ class LiveKitService {
       );
       _room!.registerTextStreamHandler(
         LiveKitTopics.vadStatus,
-        _onVadNotification,
+        _onTurnNotification,
       );
 
       // Set initial STT provider in metadata
@@ -271,7 +271,7 @@ class LiveKitService {
     );
   }
 
-  void _onVadNotification(TextStreamReader reader, String participantId) async {
+  void _onTurnNotification(TextStreamReader reader, String participantId) async {
     try {
       final text = await reader.readAll();
       final json = jsonDecode(text) as Map<String, dynamic>;
@@ -279,19 +279,16 @@ class LiveKitService {
       final typeStr = json['type'] as String?;
       if (typeStr == null) return;
 
-      VADNotificationType? type;
+      TurnNotificationType? type;
       switch (typeStr) {
         case 'turn_warning':
-          type = VADNotificationType.turnWarning;
+          type = TurnNotificationType.turnWarning;
           break;
         case 'turn_terminated':
-          type = VADNotificationType.turnTerminated;
-          break;
-        case 'asr_connection_failed':
-          type = VADNotificationType.asrConnectionFailed;
+          type = TurnNotificationType.turnTerminated;
           break;
         default:
-          _log.warning('Unknown VAD notification type: $typeStr');
+          _log.warning('Unknown turn notification type: $typeStr');
           return;
       }
 
@@ -300,10 +297,10 @@ class LiveKitService {
         ..remove('type')
         ..remove('turn_id');
 
-      _log.info('VAD notification: $typeStr turn=$turnId');
+      _log.info('Turn notification: $typeStr turn=$turnId');
 
-      _vadNotificationController.add(
-        VADNotificationEvent(
+      _turnNotificationController.add(
+        TurnNotificationEvent(
           type: type,
           turnId: turnId,
           payload: payload,
@@ -311,7 +308,7 @@ class LiveKitService {
         ),
       );
     } catch (e) {
-      _log.warning('Error processing VAD notification: $e');
+      _log.warning('Error processing turn notification: $e');
     }
   }
 
@@ -355,6 +352,6 @@ class LiveKitService {
     _audioTrackIdController.close();
     _transcriptionController.close();
     _immediateTextController.close();
-    _vadNotificationController.close();
+    _turnNotificationController.close();
   }
 }
