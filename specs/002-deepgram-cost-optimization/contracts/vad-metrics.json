@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VAD Gating Metrics",
+  "description": "Schema for VAD gating metrics logged at session end",
+
+  "type": "object",
+  "required": [
+    "session_id",
+    "asr_provider",
+    "total_audio_duration",
+    "transmitted_duration",
+    "filtered_duration",
+    "speech_segments",
+    "turns_completed",
+    "turns_terminated",
+    "session_start_time",
+    "session_end_time"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the voice session"
+    },
+    "asr_provider": {
+      "type": "string",
+      "enum": ["deepgram", "elevenlabs"],
+      "description": "ASR provider used for this session"
+    },
+    "total_audio_duration": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Total audio duration received from room (seconds)"
+    },
+    "transmitted_duration": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Audio duration sent to ASR provider (seconds)"
+    },
+    "filtered_duration": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Silence duration not transmitted (seconds)"
+    },
+    "filtering_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Ratio of filtered to total audio (0.0 - 1.0)"
+    },
+    "speech_segments": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of distinct speech segments detected"
+    },
+    "turns_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Turns that ended naturally (user stopped speaking)"
+    },
+    "turns_terminated": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Turns that were forcibly terminated (duration limit)"
+    },
+    "session_start_time": {
+      "type": "number",
+      "description": "Unix timestamp when session began"
+    },
+    "session_end_time": {
+      "type": "number",
+      "description": "Unix timestamp when session ended"
+    },
+    "connection_failures": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ASR connection failures during session"
+    },
+    "audio_discarded_on_failure": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Audio duration lost due to connection failures (seconds)"
+    }
+  },
+  "additionalProperties": false
+}
