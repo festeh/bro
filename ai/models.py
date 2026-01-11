@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field
 class IntentClassification(BaseModel):
     """Result of classifying user intent."""
 
-    intent: Literal["direct_response", "web_search", "end_dialog"] = Field(
+    intent: Literal["direct_response", "web_search", "end_dialog", "task_management"] = Field(
         description="The classified intent: direct_response for general conversation/knowledge, "
-        "web_search for queries requiring current information, end_dialog for farewells"
+        "web_search for queries requiring current information, end_dialog for farewells, "
+        "task_management for creating/querying/completing tasks"
     )
     confidence: float = Field(
         ge=0.0,

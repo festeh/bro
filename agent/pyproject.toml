@@ -11,6 +11,7 @@ dependencies = [
     "livekit-plugins-openai",
     "livekit-plugins-turn-detector",
     "python-dotenv",
+    "langgraph",
 ]
 
 [dependency-groups]

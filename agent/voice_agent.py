@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterable
+from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -26,7 +28,18 @@ from livekit.agents.voice import ModelSettings, UserStateChangedEvent
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from constants import ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL, TOPIC_LLM_STREAM, TOPIC_VAD_STATUS
+# Add parent directory to path for ai module imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from ai.graph import classify_intent  # noqa: E402 # type: ignore[import-untyped]
+
+from constants import (  # noqa: E402
+    ATTR_SEGMENT_ID,
+    ATTR_TRANSCRIPTION_FINAL,
+    TOPIC_LLM_STREAM,
+    TOPIC_VAD_STATUS,
+)
+from task_agent import TaskAgent  # noqa: E402
 
 load_dotenv()
 
@@ -50,6 +63,7 @@ LLM_MODELS = {
 DEFAULT_LLM_MODEL = "deepseekV31"
 DEFAULT_STT_PROVIDER = "deepgram"
 DEFAULT_TTS_ENABLED = True
+
 
 
 def create_stt(provider: str):
@@ -93,6 +107,8 @@ class ChatAgent(Agent):
         self._last_activity_time: float | None = None
         self._session_warning_sent: bool = False
         self._session_monitor_task: asyncio.Task | None = None
+        # Task agent for task management sub-flow
+        self._task_agent: TaskAgent | None = None
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -207,6 +223,70 @@ class ChatAgent(Agent):
                     break
         except asyncio.CancelledError:
             pass
+
+    async def on_user_turn_completed(
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
+        """Handle user message - route to task agent if needed."""
+        user_text = new_message.text_content or ""
+
+        # If task agent is active, route all messages to it
+        if self._task_agent and self._task_agent.is_active:
+            response = await self._task_agent.process_message(user_text)
+            logger.info(f"Task agent response: {response.text[:100]}...")
+
+            if response.should_exit:
+                logger.info(f"Task agent exiting: {response.exit_reason}")
+                self._task_agent = None
+
+            # Send response and stop default LLM flow
+            await self._speak_and_stop(response.text)
+            return
+
+        # Classify intent using LLM
+        classification = await classify_intent([("user", user_text)])
+        logger.debug(
+            f"Intent classified: {classification.intent} "
+            f"(confidence: {classification.confidence:.2f})"
+        )
+
+        # Route task_management intent to task agent
+        if classification.intent == "task_management":
+            logger.info(f"Task intent detected: {user_text[:50]}...")
+
+            # Create task agent if needed
+            if not self._task_agent:
+                self._task_agent = TaskAgent(session_id=self._session_id)
+
+            response = await self._task_agent.process_message(user_text)
+            logger.info(f"Task agent response: {response.text[:100]}...")
+
+            # Send response and stop default LLM flow
+            await self._speak_and_stop(response.text)
+            return
+
+        # Not a task message - let default LLM flow continue
+        # (don't raise StopResponse, let Agent handle normally)
+
+    async def _speak_and_stop(self, text: str) -> None:
+        """Send text to frontend and stop default response flow."""
+        # Stream text immediately to frontend
+        if self._room:
+            self._segment_id = f"TASK_{uuid.uuid4().hex[:8]}"
+            writer = await self._room.local_participant.stream_text(
+                topic=TOPIC_LLM_STREAM,
+                attributes={
+                    ATTR_SEGMENT_ID: self._segment_id,
+                    ATTR_TRANSCRIPTION_FINAL: "true",
+                },
+            )
+            await writer.write(text)
+            await writer.aclose()
+
+        # TODO: Integrate TTS for task agent responses
+        # For now, text is sent to frontend for display
+
+        raise StopResponse()
 
 
 class TranscribeAgent(Agent):

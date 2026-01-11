@@ -18,10 +18,11 @@ log = get_graph_logger()
 CLASSIFICATION_SYSTEM_PROMPT = """You are an AI assistant that classifies user intents and responds appropriately.
 
 For each user message, you must:
-1. Classify the intent into one of three categories:
+1. Classify the intent into one of four categories:
    - "direct_response": General conversation, greetings, questions you can answer from knowledge
    - "web_search": Questions about current events, real-time data, recent news, prices, weather
    - "end_dialog": Farewells, goodbyes, "thanks that's all", dismissals
+   - "task_management": Creating, listing, completing, updating, or deleting tasks/todos
 
 2. Provide a confidence score (0.0 to 1.0) for your classification
 
@@ -31,11 +32,13 @@ For each user message, you must:
    - For direct_response: Answer the question or continue the conversation
    - For web_search: Generate a placeholder (will be replaced with search results)
    - For end_dialog: Provide a friendly farewell message
+   - For task_management: Generate a placeholder (will be handled by task agent)
 
 Classification guidelines:
 - Default to direct_response if unsure
 - Use web_search only for genuinely time-sensitive or current information
-- Common farewells: goodbye, bye, see you, thanks that's all, stop, end conversation"""
+- Common farewells: goodbye, bye, see you, thanks that's all, stop, end conversation
+- Task management examples: "add task", "what's due today", "complete the milk task", "remind me to", "my tasks", "what do I need to do", "mark X as done\""""
 
 
 def create_llm(provider: Optional[str] = None) -> ChatOpenAI:

@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-01-10
 
 ## Active Technologies
+- Python 3.11+ (matching existing agent codebase) + livekit-agents (existing), asyncio subprocess for CLI execution (004-dimaist-cli-integration)
+- N/A (Dimaist manages its own PostgreSQL; bro only invokes CLI) (004-dimaist-cli-integration)
 
 - Python 3.11+ + ruff (linter/formatter), ty (type checker) (003-python-type-safety)
 
@@ -22,6 +24,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 004-dimaist-cli-integration: Added Python 3.11+ (matching existing agent codebase) + livekit-agents (existing), asyncio subprocess for CLI execution
 
 - 003-python-type-safety: Added Python 3.11+ + ruff (linter/formatter), ty (type checker)
 
