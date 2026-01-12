@@ -1,16 +1,16 @@
 """LangGraph chat graph with intent classification and persistence."""
 
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
 
-from config import get_provider_config, settings
-from logging_config import get_graph_logger
-from models import IntentClassification
-from search import format_search_results, search_web
+from ai.config import get_provider_config, settings
+from ai.logging_config import get_graph_logger
+from ai.models import Intent, IntentClassification
+from ai.search import format_search_results, search_web
 
 log = get_graph_logger()
 
@@ -41,28 +41,28 @@ Classification guidelines:
 - Task management examples: "add task", "what's due today", "complete the milk task", "remind me to", "my tasks", "what do I need to do", "mark X as done\""""
 
 
-def create_llm(provider: Optional[str] = None) -> ChatOpenAI:
+def create_llm(provider: str | None = None) -> ChatOpenAI:
     """Create the LLM client with configured provider."""
     if provider:
         config = get_provider_config(provider)
         log.debug("llm_created", provider=provider, model=config["model"])
         return ChatOpenAI(
-            base_url=config["base_url"],
-            api_key=config["api_key"],
-            model=config["model"],
+            base_url=config["base_url"],  # type: ignore[call-arg]
+            api_key=config["api_key"],  # type: ignore[call-arg]
+            model=config["model"],  # type: ignore[call-arg]
             streaming=True,
         )
     log.debug("llm_created", provider="default", model=settings.llm_model)
     return ChatOpenAI(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key,
-        model=settings.llm_model,
+        base_url=settings.llm_base_url,  # type: ignore[call-arg]
+        api_key=settings.llm_api_key,  # type: ignore[call-arg]
+        model=settings.llm_model,  # type: ignore[call-arg]
         streaming=True,
     )
 
 
 async def classify_intent(
-    messages: list, provider: Optional[str] = None
+    messages: list, provider: str | None = None
 ) -> IntentClassification:
     """Classify the user's intent from their message.
 
@@ -99,12 +99,12 @@ async def classify_intent(
 
     try:
         result = await classifier.ainvoke(classification_messages)
-        return result
+        return result  # type: ignore[return-value]
     except Exception as e:
         log.error("classification_failed", error=str(e))
         # Fallback to direct_response on error
         return IntentClassification(
-            intent="direct_response",
+            intent=Intent.DIRECT_RESPONSE,
             confidence=0.5,
             search_query=None,
             response="I'm having trouble processing your request. Could you try rephrasing?",
@@ -120,7 +120,7 @@ async def chat_node(state: MessagesState) -> MessagesState:
 
 def create_graph() -> StateGraph:
     """Create the chat graph."""
-    graph = StateGraph(MessagesState)
+    graph = StateGraph(MessagesState)  # type: ignore[arg-type]
     graph.add_node("chat", chat_node)
     graph.add_edge(START, "chat")
     log.debug("graph_created")
@@ -138,7 +138,7 @@ async def create_app_with_checkpointer():
 
 
 async def stream_response(
-    app, thread_id: str, user_message: str, provider: Optional[str] = None
+    app, thread_id: str, user_message: str, provider: str | None = None
 ) -> AsyncIterator[str | dict]:
     """Stream the AI response with intent classification.
 
@@ -177,7 +177,7 @@ async def stream_response(
     )
 
     # Route based on intent
-    if classification.intent == "end_dialog":
+    if classification.intent == Intent.END_DIALOG:
         # Yield farewell response
         yield classification.response
 
@@ -201,7 +201,7 @@ async def stream_response(
         log.debug("dialog_ended", thread_id=thread_id)
         return
 
-    elif classification.intent == "web_search":
+    elif classification.intent == Intent.WEB_SEARCH:
         # Perform web search
         search_query = classification.search_query or user_message
         search_results = await search_web(search_query)
@@ -230,7 +230,7 @@ async def stream_response(
 
         async for chunk in llm.astream(search_context_messages):
             if chunk.content:
-                full_response += chunk.content
+                full_response += chunk.content  # type: ignore[operator]
                 token_count += 1
                 yield chunk.content
 
@@ -255,7 +255,7 @@ async def stream_response(
 
         async for chunk in llm.astream(messages):
             if chunk.content:
-                full_response += chunk.content
+                full_response += chunk.content  # type: ignore[operator]
                 token_count += 1
                 yield chunk.content
 

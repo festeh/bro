@@ -2,12 +2,10 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 import uuid
 from collections.abc import AsyncIterable
-from pathlib import Path
-from typing import Literal
+from enum import StrEnum
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -28,18 +26,15 @@ from livekit.agents.voice import ModelSettings, UserStateChangedEvent
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-# Add parent directory to path for ai module imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from ai.graph import classify_intent  # noqa: E402 # type: ignore[import-untyped]
-
-from constants import (  # noqa: E402
+from agent.constants import (
     ATTR_SEGMENT_ID,
     ATTR_TRANSCRIPTION_FINAL,
     TOPIC_LLM_STREAM,
     TOPIC_VAD_STATUS,
 )
-from task_agent import TaskAgent  # noqa: E402
+from agent.task_agent import TaskAgent
+from ai.graph import classify_intent
+from ai.models import Intent
 
 load_dotenv()
 
@@ -47,7 +42,13 @@ load_dotenv()
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
 SESSION_WARNING_THRESHOLD = 55.0  # seconds
 
-NotificationType = Literal["session_warning", "session_timeout", "session_ready"]
+
+class NotificationType(StrEnum):
+    """Session notification types."""
+
+    SESSION_WARNING = "session_warning"
+    SESSION_TIMEOUT = "session_timeout"
+    SESSION_READY = "session_ready"
 
 logger = logging.getLogger("voice-agent")
 
@@ -208,14 +209,16 @@ class ChatAgent(Agent):
                 # Send warning at 55s of inactivity
                 if elapsed >= SESSION_WARNING_THRESHOLD and not self._session_warning_sent:
                     remaining = int(SESSION_TIMEOUT - elapsed)
-                    await self._send_session_notification("session_warning", remaining_seconds=remaining)
+                    await self._send_session_notification(
+                        NotificationType.SESSION_WARNING, remaining_seconds=remaining
+                    )
                     self._session_warning_sent = True
                     logger.info(f"Session warning: {remaining}s remaining")
 
                 # Timeout at 60s of inactivity
                 if elapsed >= SESSION_TIMEOUT:
                     await self._send_session_notification(
-                        "session_timeout",
+                        NotificationType.SESSION_TIMEOUT,
                         reason="inactivity",
                         idle_duration=elapsed,
                     )
@@ -251,7 +254,7 @@ class ChatAgent(Agent):
         )
 
         # Route task_management intent to task agent
-        if classification.intent == "task_management":
+        if classification.intent == Intent.TASK_MANAGEMENT:
             logger.info(f"Task intent detected: {user_text[:50]}...")
 
             # Create task agent if needed
@@ -395,7 +398,7 @@ async def entrypoint(ctx: JobContext):
         # Start session timer and notify frontend
         if agent and isinstance(agent, ChatAgent):
             agent.start_session_timer()
-            await agent._send_session_notification("session_ready")
+            await agent._send_session_notification(NotificationType.SESSION_READY)
 
     async def _stop_session():
         """Stop agent session when user disables mic."""

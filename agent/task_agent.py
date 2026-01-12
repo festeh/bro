@@ -7,10 +7,48 @@ The LLM handles conversation context, pending confirmations, and CLI command gen
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
-from dimaist_cli import DimaistCLI
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+from agent.dimaist_cli import DimaistCLI
+from ai.config import settings
 
 logger = logging.getLogger("task-agent")
+
+
+class Action(StrEnum):
+    """Task agent action types."""
+
+    NONE = "none"
+    PROPOSE = "propose"
+    CONFIRM = "confirm"
+    CANCEL = "cancel"
+    QUERY = "query"
+    EXIT = "exit"
+
+
+class TaskAgentOutput(BaseModel):
+    """Structured output from LLM for task agent decisions."""
+
+    response: str = Field(description="Text response to speak to the user")
+    action: Action = Field(
+        description=(
+            "Action to take: "
+            "'none' for general conversation, "
+            "'propose' to suggest a CLI command for user approval, "
+            "'confirm' when user approves pending action, "
+            "'cancel' when user declines pending action, "
+            "'query' to execute a read-only CLI command immediately, "
+            "'exit' to end the task management session"
+        )
+    )
+    cli_args: list[str] | None = Field(
+        default=None,
+        description="CLI arguments for 'propose' or 'query' actions (e.g., ['task', 'list', '--due', 'today'])",
+    )
 
 
 @dataclass
@@ -120,23 +158,145 @@ class TaskAgent:
         Returns:
             AgentResponse with text to speak and optional exit signal
         """
-        raise NotImplementedError("Implement in Phase 2")
+        if not self._state:
+            return AgentResponse(text="Session not active.", exit_reason="no_session")
+
+        # Add user message to history
+        self._state.messages.append(Message(role="user", content=user_message))
+
+        # Build messages for LLM
+        system_prompt = await self._build_system_prompt()
+        llm_messages = [SystemMessage(content=system_prompt)]
+
+        for msg in self._state.messages:
+            if msg.role == "user":
+                llm_messages.append(HumanMessage(content=msg.content))
+            else:
+                llm_messages.append(AIMessage(content=msg.content))
+
+        # Call LLM with structured output
+        try:
+            output = await self._call_llm(llm_messages)
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            return AgentResponse(
+                text="I'm having trouble processing that. Could you try again?"
+            )
+
+        logger.info(f"LLM output: action={output.action}, cli_args={output.cli_args}")
+
+        # Add assistant response to history
+        self._state.messages.append(Message(role="assistant", content=output.response))
+
+        # Handle action
+        return await self._handle_action(output)
+
+    async def _call_llm(self, messages: list) -> TaskAgentOutput:
+        """Call LLM with structured output.
+
+        Isolated wrapper for langchain which lacks proper type stubs.
+        Runtime type check ensures correct return type.
+        """
+        llm = ChatOpenAI(
+            base_url=settings.llm_base_url,  # type: ignore[call-arg]
+            api_key=settings.llm_api_key,  # type: ignore[call-arg]
+            model=settings.llm_model,  # type: ignore[call-arg]
+        )
+        structured_llm = llm.with_structured_output(
+            TaskAgentOutput,
+            method="function_calling",
+        )
+        result = await structured_llm.ainvoke(messages)
+        if not isinstance(result, TaskAgentOutput):
+            raise TypeError(f"Unexpected LLM output type: {type(result)}")
+        return result
 
     async def _build_system_prompt(self) -> str:
         """Build system prompt with CLI help and date context."""
         cli_help = await self._cli.get_help()
+
+        # Include pending command context if any
+        pending_context = ""
+        if self._state and self._state.pending_command:
+            cmd = " ".join(self._state.pending_command)
+            pending_context = f"""
+PENDING ACTION awaiting user confirmation: {cmd}
+Use action="confirm" if user approves, action="cancel" if user declines.
+"""
+
         return f"""You are a task management assistant. Help users manage their tasks via voice.
 
 Current date: {self.today}
 Current time: {self.current_datetime}
-
+{pending_context}
 Available CLI commands:
 {cli_help}
 
 Guidelines:
-- For any action that modifies tasks (create/update/complete/delete), propose the action and wait for user confirmation
-- Parse natural language dates relative to current date
-- If a request is ambiguous, ask for clarification
+- For modifications (create/update/complete/delete), use action="propose" with cli_args
+- For read-only queries, use action="query" with cli_args
+- If ambiguous, ask for clarification with action="none"
+- When user wants to end the task session, use action="exit"
 - Keep responses concise for voice
-- When user says "no" or "never mind" to "anything else?", exit the task flow
 """
+
+    async def _handle_action(self, output: TaskAgentOutput) -> AgentResponse:
+        """Handle the LLM's action decision."""
+        if not self._state:
+            return AgentResponse(text="Session error.", exit_reason="no_session")
+
+        match output.action:
+            case Action.NONE:
+                # General conversation, no CLI action
+                return AgentResponse(text=output.response)
+
+            case Action.PROPOSE:
+                # Set pending command for user approval
+                if output.cli_args:
+                    self._state.pending_command = output.cli_args
+                    logger.info(f"Pending command set: {output.cli_args}")
+                return AgentResponse(text=output.response)
+
+            case Action.CONFIRM:
+                # User confirmed - execute pending command
+                if self._state.pending_command:
+                    try:
+                        result = await self._cli.run(*self._state.pending_command)
+                        self._state.pending_command = None
+                        logger.info(f"Command executed successfully: {result}")
+                        return AgentResponse(text=output.response)
+                    except Exception as e:
+                        logger.error(f"CLI command failed: {e}")
+                        self._state.pending_command = None
+                        return AgentResponse(text=f"Command failed: {e}. What else?")
+                return AgentResponse(text="Nothing to confirm. What would you like to do?")
+
+            case Action.CANCEL:
+                # User declined - clear pending command
+                self._state.pending_command = None
+                return AgentResponse(text=output.response)
+
+            case Action.QUERY:
+                # Execute read-only command immediately
+                if output.cli_args:
+                    try:
+                        result = await self._cli.run(*output.cli_args)
+                        # Format result for voice
+                        if isinstance(result, list):
+                            if not result:
+                                return AgentResponse(text="No tasks found.")
+                            # LLM already generated response, but we can enhance with data
+                            logger.info(f"Query returned {len(result)} items")
+                        return AgentResponse(text=output.response)
+                    except Exception as e:
+                        logger.error(f"Query failed: {e}")
+                        return AgentResponse(text=f"Couldn't fetch tasks: {e}")
+                return AgentResponse(text=output.response)
+
+            case Action.EXIT:
+                # End task management session
+                self._state.active = False
+                return AgentResponse(text=output.response, exit_reason="user_exit")
+
+            case _:
+                return AgentResponse(text=output.response)

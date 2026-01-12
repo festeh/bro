@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from graph import CLASSIFICATION_SYSTEM_PROMPT, classify_intent, create_llm
-from models import IntentClassification
+from ai.graph import CLASSIFICATION_SYSTEM_PROMPT, classify_intent, create_llm
+from ai.models import IntentClassification
 
 
 class TestCreateLLM:

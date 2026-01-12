@@ -8,9 +8,9 @@ import edge_tts
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
-from config import settings
-from graph import create_app_with_checkpointer, get_history, stream_response
-from logging_config import get_server_logger, get_ws_logger, setup_logging
+from ai.config import settings
+from ai.graph import create_app_with_checkpointer, get_history, stream_response
+from ai.logging_config import get_server_logger, get_ws_logger, setup_logging
 
 # Initialize logging
 setup_logging(json_logs=settings.json_logs, log_level=settings.log_level)

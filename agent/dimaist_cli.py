@@ -9,7 +9,7 @@ import json
 import logging
 import os
 
-from constants import DIMAIST_CLI_PATH, TASK_AGENT_TIMEOUT
+from agent.constants import DIMAIST_CLI_PATH, TASK_AGENT_TIMEOUT
 
 logger = logging.getLogger("dimaist-cli")
 
