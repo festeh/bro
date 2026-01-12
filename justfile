@@ -194,32 +194,36 @@ fmt:
     cd desktop && dart format lib/
 
 # ─────────────────────────────────────────────────────────────
+# Python (shared monorepo)
+# ─────────────────────────────────────────────────────────────
+
+# Sync all Python dependencies
+deps-py:
+    uv sync --group dev
+
+# Lint Python code
+lint-py:
+    uv run ruff check agent ai
+
+# Auto-fix Python lint issues
+fix-py:
+    uv run ruff check agent ai --fix
+
+# Type check Python code
+typecheck-py:
+    uv run ty check agent ai
+
+# Run all Python checks (lint + typecheck)
+check-py:
+    uv run ruff check agent ai && uv run ty check agent ai
+
+# ─────────────────────────────────────────────────────────────
 # STT Agent (LiveKit transcription worker)
 # ─────────────────────────────────────────────────────────────
 
 # Run STT agent worker
 agent:
-    uv run --project agent python agent/voice_agent.py dev
-
-# Sync agent dependencies
-agent-deps:
-    cd agent && uv sync --group dev
-
-# Lint agent code
-agent-lint:
-    cd agent && uv run ruff check .
-
-# Auto-fix agent lint issues
-agent-fix:
-    cd agent && uv run ruff check . --fix
-
-# Type check agent code
-agent-typecheck:
-    cd agent && uv run ty check .
-
-# Run all agent checks (lint + typecheck)
-agent-check:
-    cd agent && uv run ruff check . && uv run ty check .
+    uv run python -m agent.voice_agent dev
 
 # ─────────────────────────────────────────────────────────────
 # AI Server
@@ -227,11 +231,7 @@ agent-check:
 
 # Run AI server
 ai:
-    cd ai && uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000
-
-# Sync AI dependencies
-ai-deps:
-    cd ai && uv sync
+    uv run uvicorn ai.server:app --reload --host 0.0.0.0 --port 8000
 
 # ─────────────────────────────────────────────────────────────
 # Frontend
@@ -253,6 +253,6 @@ fe-deps:
 dev:
     #!/usr/bin/env bash
     trap 'kill 0' EXIT
-    (cd ai && uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000) &
+    (uv run uvicorn ai.server:app --reload --host 0.0.0.0 --port 8000) &
     (cd ai/frontend && npm run dev -- --port 5173) &
     wait

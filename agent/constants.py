@@ -6,3 +6,7 @@ TOPIC_VAD_STATUS = "lk.vad_status"        # VAD gating notifications
 # Transcription attributes
 ATTR_SEGMENT_ID = "lk.segment_id"
 ATTR_TRANSCRIPTION_FINAL = "lk.transcription_final"
+
+# Task agent configuration
+DIMAIST_CLI_PATH = "dimaist-cli"  # Default path, can be overridden via env
+TASK_AGENT_TIMEOUT = 30.0  # CLI command timeout in seconds

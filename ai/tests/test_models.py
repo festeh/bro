@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from models import IntentClassification
+from ai.models import IntentClassification
 
 
 class TestIntentClassification:

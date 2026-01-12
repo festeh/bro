@@ -8,9 +8,9 @@ To run these tests, ensure CHUTES_API_KEY is set in .env with a valid key.
 
 import pytest
 
-from config import settings
-from graph import classify_intent
-from models import IntentClassification
+from ai.config import settings
+from ai.graph import classify_intent
+from ai.models import IntentClassification
 
 
 async def check_api_works() -> bool:

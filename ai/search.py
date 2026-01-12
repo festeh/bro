@@ -4,8 +4,8 @@ from typing import Any
 
 from langchain_community.tools import BraveSearch
 
-from config import settings
-from logging_config import get_logger
+from ai.config import settings
+from ai.logging_config import get_logger
 
 log = get_logger(__name__)
 

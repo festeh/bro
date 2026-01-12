@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from collections.abc import AsyncIterable
-from typing import Literal
+from enum import StrEnum
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -26,7 +26,15 @@ from livekit.agents.voice import ModelSettings, UserStateChangedEvent
 from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from constants import ATTR_SEGMENT_ID, ATTR_TRANSCRIPTION_FINAL, TOPIC_LLM_STREAM, TOPIC_VAD_STATUS
+from agent.constants import (
+    ATTR_SEGMENT_ID,
+    ATTR_TRANSCRIPTION_FINAL,
+    TOPIC_LLM_STREAM,
+    TOPIC_VAD_STATUS,
+)
+from agent.task_agent import TaskAgent
+from ai.graph import classify_intent
+from ai.models import Intent
 
 load_dotenv()
 
@@ -34,7 +42,13 @@ load_dotenv()
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
 SESSION_WARNING_THRESHOLD = 55.0  # seconds
 
-NotificationType = Literal["session_warning", "session_timeout", "session_ready"]
+
+class NotificationType(StrEnum):
+    """Session notification types."""
+
+    SESSION_WARNING = "session_warning"
+    SESSION_TIMEOUT = "session_timeout"
+    SESSION_READY = "session_ready"
 
 logger = logging.getLogger("voice-agent")
 
@@ -50,6 +64,7 @@ LLM_MODELS = {
 DEFAULT_LLM_MODEL = "deepseekV31"
 DEFAULT_STT_PROVIDER = "deepgram"
 DEFAULT_TTS_ENABLED = True
+
 
 
 def create_stt(provider: str):
@@ -93,6 +108,8 @@ class ChatAgent(Agent):
         self._last_activity_time: float | None = None
         self._session_warning_sent: bool = False
         self._session_monitor_task: asyncio.Task | None = None
+        # Task agent for task management sub-flow
+        self._task_agent: TaskAgent | None = None
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -192,14 +209,16 @@ class ChatAgent(Agent):
                 # Send warning at 55s of inactivity
                 if elapsed >= SESSION_WARNING_THRESHOLD and not self._session_warning_sent:
                     remaining = int(SESSION_TIMEOUT - elapsed)
-                    await self._send_session_notification("session_warning", remaining_seconds=remaining)
+                    await self._send_session_notification(
+                        NotificationType.SESSION_WARNING, remaining_seconds=remaining
+                    )
                     self._session_warning_sent = True
                     logger.info(f"Session warning: {remaining}s remaining")
 
                 # Timeout at 60s of inactivity
                 if elapsed >= SESSION_TIMEOUT:
                     await self._send_session_notification(
-                        "session_timeout",
+                        NotificationType.SESSION_TIMEOUT,
                         reason="inactivity",
                         idle_duration=elapsed,
                     )
@@ -207,6 +226,70 @@ class ChatAgent(Agent):
                     break
         except asyncio.CancelledError:
             pass
+
+    async def on_user_turn_completed(
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
+        """Handle user message - route to task agent if needed."""
+        user_text = new_message.text_content or ""
+
+        # If task agent is active, route all messages to it
+        if self._task_agent and self._task_agent.is_active:
+            response = await self._task_agent.process_message(user_text)
+            logger.info(f"Task agent response: {response.text[:100]}...")
+
+            if response.should_exit:
+                logger.info(f"Task agent exiting: {response.exit_reason}")
+                self._task_agent = None
+
+            # Send response and stop default LLM flow
+            await self._speak_and_stop(response.text)
+            return
+
+        # Classify intent using LLM
+        classification = await classify_intent([("user", user_text)])
+        logger.debug(
+            f"Intent classified: {classification.intent} "
+            f"(confidence: {classification.confidence:.2f})"
+        )
+
+        # Route task_management intent to task agent
+        if classification.intent == Intent.TASK_MANAGEMENT:
+            logger.info(f"Task intent detected: {user_text[:50]}...")
+
+            # Create task agent if needed
+            if not self._task_agent:
+                self._task_agent = TaskAgent(session_id=self._session_id)
+
+            response = await self._task_agent.process_message(user_text)
+            logger.info(f"Task agent response: {response.text[:100]}...")
+
+            # Send response and stop default LLM flow
+            await self._speak_and_stop(response.text)
+            return
+
+        # Not a task message - let default LLM flow continue
+        # (don't raise StopResponse, let Agent handle normally)
+
+    async def _speak_and_stop(self, text: str) -> None:
+        """Send text to frontend and stop default response flow."""
+        # Stream text immediately to frontend
+        if self._room:
+            self._segment_id = f"TASK_{uuid.uuid4().hex[:8]}"
+            writer = await self._room.local_participant.stream_text(
+                topic=TOPIC_LLM_STREAM,
+                attributes={
+                    ATTR_SEGMENT_ID: self._segment_id,
+                    ATTR_TRANSCRIPTION_FINAL: "true",
+                },
+            )
+            await writer.write(text)
+            await writer.aclose()
+
+        # TODO: Integrate TTS for task agent responses
+        # For now, text is sent to frontend for display
+
+        raise StopResponse()
 
 
 class TranscribeAgent(Agent):
@@ -315,7 +398,7 @@ async def entrypoint(ctx: JobContext):
         # Start session timer and notify frontend
         if agent and isinstance(agent, ChatAgent):
             agent.start_session_timer()
-            await agent._send_session_notification("session_ready")
+            await agent._send_session_notification(NotificationType.SESSION_READY)
 
     async def _stop_session():
         """Stop agent session when user disables mic."""

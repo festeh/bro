@@ -2,7 +2,7 @@
 
 import pytest
 
-from search import format_search_results
+from ai.search import format_search_results
 
 
 class TestFormatSearchResults:
