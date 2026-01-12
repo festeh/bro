@@ -51,7 +51,7 @@ class TestClassifyIntent:
             response="Hello! How can I help you today?",
         )
 
-        with patch("graph.create_llm") as mock_create_llm:
+        with patch("ai.graph.create_llm") as mock_create_llm:
             mock_llm = MagicMock()
             mock_classifier = AsyncMock(return_value=mock_classification)
             mock_llm.with_structured_output.return_value.ainvoke = mock_classifier
@@ -72,7 +72,7 @@ class TestClassifyIntent:
             response="Let me search for that.",
         )
 
-        with patch("graph.create_llm") as mock_create_llm:
+        with patch("ai.graph.create_llm") as mock_create_llm:
             mock_llm = MagicMock()
             mock_classifier = AsyncMock(return_value=mock_classification)
             mock_llm.with_structured_output.return_value.ainvoke = mock_classifier
@@ -92,7 +92,7 @@ class TestClassifyIntent:
             response="Goodbye! Have a great day!",
         )
 
-        with patch("graph.create_llm") as mock_create_llm:
+        with patch("ai.graph.create_llm") as mock_create_llm:
             mock_llm = MagicMock()
             mock_classifier = AsyncMock(return_value=mock_classification)
             mock_llm.with_structured_output.return_value.ainvoke = mock_classifier
@@ -106,7 +106,7 @@ class TestClassifyIntent:
     @pytest.mark.asyncio
     async def test_classify_fallback_on_error(self):
         """Test that classification falls back to direct_response on error."""
-        with patch("graph.create_llm") as mock_create_llm:
+        with patch("ai.graph.create_llm") as mock_create_llm:
             mock_llm = MagicMock()
             mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
                 side_effect=Exception("API error")
@@ -128,7 +128,7 @@ class TestClassifyIntent:
             response="The capital of France is Paris.",
         )
 
-        with patch("graph.create_llm") as mock_create_llm:
+        with patch("ai.graph.create_llm") as mock_create_llm:
             mock_llm = MagicMock()
             mock_classifier = AsyncMock(return_value=mock_classification)
             mock_llm.with_structured_output.return_value.ainvoke = mock_classifier
