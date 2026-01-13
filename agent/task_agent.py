@@ -14,7 +14,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from agent.dimaist_cli import DimaistCLI
-from ai.config import settings
+from ai.config import get_provider_config
 
 logger = logging.getLogger("task-agent")
 
@@ -95,17 +95,19 @@ class TaskAgent:
     def __init__(
         self,
         session_id: str,
-        cli_path: str = "dimaist-cli",
+        cli_path: str | None = None,
     ) -> None:
         """Initialize task agent.
 
         Args:
             session_id: Session ID for this task agent instance
-            cli_path: Path to dimaist-cli binary
+            cli_path: Path to dimaist-cli binary (default: from DIMAIST_CLI_PATH env)
         """
         self._session_id = session_id
-        self._cli = DimaistCLI(cli_path)
+        self._cli = DimaistCLI(cli_path)  # DimaistCLI reads from env if None
         self._state: TaskAgentState | None = TaskAgentState(session_id=session_id)
+        self._last_cli_command: list[str] | None = None  # For REPL debugging
+        self._last_cli_result: dict | list | None = None  # For REPL debugging
 
     @property
     def current_datetime(self) -> str:
@@ -197,10 +199,11 @@ class TaskAgent:
         Isolated wrapper for langchain which lacks proper type stubs.
         Runtime type check ensures correct return type.
         """
+        config = get_provider_config("chutes")
         llm = ChatOpenAI(
-            base_url=settings.llm_base_url,  # type: ignore[call-arg]
-            api_key=settings.llm_api_key,  # type: ignore[call-arg]
-            model=settings.llm_model,  # type: ignore[call-arg]
+            base_url=config["base_url"],  # type: ignore[call-arg]
+            api_key=config["api_key"],  # type: ignore[call-arg]
+            model=config["model"],  # type: ignore[call-arg]
         )
         structured_llm = llm.with_structured_output(
             TaskAgentOutput,
@@ -210,6 +213,40 @@ class TaskAgent:
         if not isinstance(result, TaskAgentOutput):
             raise TypeError(f"Unexpected LLM output type: {type(result)}")
         return result
+
+    def _get_llm(self) -> ChatOpenAI:
+        """Get configured LLM instance."""
+        config = get_provider_config("chutes")
+        return ChatOpenAI(
+            base_url=config["base_url"],  # type: ignore[call-arg]
+            api_key=config["api_key"],  # type: ignore[call-arg]
+            model=config["model"],  # type: ignore[call-arg]
+        )
+
+    async def _summarize_query_results(self, result: dict | list) -> str:
+        """Summarize query results using LLM for natural language response."""
+        import json
+
+        # Format results for LLM
+        if isinstance(result, list):
+            if not result:
+                return "No tasks found."
+            result_text = json.dumps(result, indent=2, default=str)
+        else:
+            result_text = json.dumps(result, indent=2, default=str)
+
+        prompt = f"""Summarize these task query results in a brief, conversational response suitable for voice.
+Be concise - just the key information. Don't repeat the full data, summarize it.
+
+Query results:
+{result_text}
+
+Current date: {self.today}
+"""
+        llm = self._get_llm()
+        messages = [HumanMessage(content=prompt)]
+        response = await llm.ainvoke(messages)
+        return str(response.content)
 
     async def _build_system_prompt(self) -> str:
         """Build system prompt with CLI help and date context."""
@@ -242,6 +279,9 @@ Guidelines:
 
     async def _handle_action(self, output: TaskAgentOutput) -> AgentResponse:
         """Handle the LLM's action decision."""
+        self._last_cli_command = None  # Reset for this action
+        self._last_cli_result = None
+
         if not self._state:
             return AgentResponse(text="Session error.", exit_reason="no_session")
 
@@ -261,6 +301,7 @@ Guidelines:
                 # User confirmed - execute pending command
                 if self._state.pending_command:
                     try:
+                        self._last_cli_command = self._state.pending_command
                         result = await self._cli.run(*self._state.pending_command)
                         self._state.pending_command = None
                         logger.info(f"Command executed successfully: {result}")
@@ -280,14 +321,17 @@ Guidelines:
                 # Execute read-only command immediately
                 if output.cli_args:
                     try:
+                        self._last_cli_command = output.cli_args
                         result = await self._cli.run(*output.cli_args)
+                        self._last_cli_result = result
                         # Format result for voice
                         if isinstance(result, list):
                             if not result:
                                 return AgentResponse(text="No tasks found.")
-                            # LLM already generated response, but we can enhance with data
                             logger.info(f"Query returned {len(result)} items")
-                        return AgentResponse(text=output.response)
+                        # Get LLM to summarize the results
+                        summary = await self._summarize_query_results(result)
+                        return AgentResponse(text=summary)
                     except Exception as e:
                         logger.error(f"Query failed: {e}")
                         return AgentResponse(text=f"Couldn't fetch tasks: {e}")
