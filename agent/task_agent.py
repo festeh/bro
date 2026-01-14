@@ -96,18 +96,24 @@ class TaskAgent:
         self,
         session_id: str,
         cli_path: str | None = None,
+        provider: str = "groq",
+        model: str | None = "qwen/qwen3-32b",
     ) -> None:
         """Initialize task agent.
 
         Args:
             session_id: Session ID for this task agent instance
             cli_path: Path to dimaist-cli binary (default: from DIMAIST_CLI_PATH env)
+            provider: LLM provider name (chutes, groq, openrouter, gemini)
+            model: Model name override (None = use provider default)
         """
         self._session_id = session_id
         self._cli = DimaistCLI(cli_path)  # DimaistCLI reads from env if None
         self._state: TaskAgentState | None = TaskAgentState(session_id=session_id)
         self._last_cli_command: list[str] | None = None  # For REPL debugging
         self._last_cli_result: dict | list | None = None  # For REPL debugging
+        self._provider = provider
+        self._model = model
 
     @property
     def current_datetime(self) -> str:
@@ -128,6 +134,24 @@ class TaskAgent:
     def has_pending(self) -> bool:
         """Whether there's a command awaiting confirmation (for UI button state)."""
         return self._state is not None and self._state.pending_command is not None
+
+    @property
+    def provider(self) -> str:
+        """Current LLM provider."""
+        return self._provider
+
+    @property
+    def model(self) -> str:
+        """Current model name (from provider config or override)."""
+        if self._model:
+            return self._model
+        config = get_provider_config(self._provider)
+        return config["model"]
+
+    def set_model(self, provider: str, model: str) -> None:
+        """Change provider and model. Keeps conversation history."""
+        self._provider = provider
+        self._model = model
 
     async def confirm(self) -> AgentResponse:
         """Execute pending command (button press - no LLM)."""
@@ -199,11 +223,11 @@ class TaskAgent:
         Isolated wrapper for langchain which lacks proper type stubs.
         Runtime type check ensures correct return type.
         """
-        config = get_provider_config("chutes")
+        config = get_provider_config(self._provider)
         llm = ChatOpenAI(
             base_url=config["base_url"],  # type: ignore[call-arg]
             api_key=config["api_key"],  # type: ignore[call-arg]
-            model=config["model"],  # type: ignore[call-arg]
+            model=self._model or config["model"],  # type: ignore[call-arg]
         )
         structured_llm = llm.with_structured_output(
             TaskAgentOutput,
@@ -216,11 +240,11 @@ class TaskAgent:
 
     def _get_llm(self) -> ChatOpenAI:
         """Get configured LLM instance."""
-        config = get_provider_config("chutes")
+        config = get_provider_config(self._provider)
         return ChatOpenAI(
             base_url=config["base_url"],  # type: ignore[call-arg]
             api_key=config["api_key"],  # type: ignore[call-arg]
-            model=config["model"],  # type: ignore[call-arg]
+            model=self._model or config["model"],  # type: ignore[call-arg]
         )
 
     async def _summarize_query_results(self, result: dict | list) -> str:

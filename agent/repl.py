@@ -33,6 +33,19 @@ from agent.task_agent import AgentResponse, TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 
+# Provider aliases for /model command
+PROVIDER_ALIASES = {
+    "c": "chutes",
+    "g": "groq",
+    "o": "openrouter",
+    "ge": "gemini",
+    # Full names also work
+    "chutes": "chutes",
+    "groq": "groq",
+    "openrouter": "openrouter",
+    "gemini": "gemini",
+}
+
 
 def format_task_response(response: AgentResponse, agent: TaskAgent) -> str:
     """Format TaskAgent response with metadata."""
@@ -71,7 +84,7 @@ def format_task_response(response: AgentResponse, agent: TaskAgent) -> str:
     return "\n".join(lines)
 
 
-def print_banner() -> None:
+def print_banner(agent: TaskAgent) -> None:
     """Print startup banner and usage instructions."""
     print("=" * 60)
     print("Agent Test REPL")
@@ -80,7 +93,9 @@ def print_banner() -> None:
     print("Messages go through intent classification, then route to")
     print("the appropriate handler (TaskAgent, web search, etc.)")
     print()
-    print("Commands: /help, /exit")
+    print(f"Model: {agent.provider} / {agent.model}")
+    print()
+    print("Commands: /help, /model, /exit")
     print("Press Ctrl+C to exit at any time.")
     print("=" * 60)
     print()
@@ -104,19 +119,25 @@ def print_help() -> None:
     print("  - end_dialog: Exits conversation")
     print()
     print("Commands:")
-    print("  /help  - Show this help")
-    print("  /exit  - Exit the REPL")
+    print("  /help              - Show this help")
+    print("  /exit              - Exit the REPL")
+    print("  /model             - Show current provider and model")
+    print("  /model <p> <model> - Switch provider and model")
+    print()
+    print("Provider aliases: c=chutes, g=groq, o=openrouter, ge=gemini")
     print()
     print("Examples:")
     print('  > add task buy groceries  (task_management)')
     print('  > what is the capital of France?  (direct_response)')
-    print('  > goodbye  (end_dialog)')
+    print('  > /model c deepseek-ai/DeepSeek-V3-0324')
+    print('  > /model g llama-3.3-70b-versatile')
     print()
 
 
-def handle_command(command: str) -> bool:
+def handle_command(command: str, agent: TaskAgent) -> bool:
     """Handle REPL command. Returns True if should exit."""
-    cmd = command.strip().lower()
+    parts = command.strip().split()
+    cmd = parts[0].lower()
 
     if cmd == "/help":
         print_help()
@@ -125,6 +146,31 @@ def handle_command(command: str) -> bool:
     if cmd == "/exit":
         print("Goodbye!")
         return True
+
+    if cmd == "/model":
+        if len(parts) == 1:
+            # Show current provider and model
+            print(f"Provider: {agent.provider}")
+            print(f"Model: {agent.model}")
+            return False
+
+        if len(parts) < 3:
+            print("Usage: /model <provider> <model>")
+            print("Provider aliases: c=chutes, g=groq, o=openrouter, ge=gemini")
+            return False
+
+        alias = parts[1].lower()
+        model = parts[2]
+
+        provider = PROVIDER_ALIASES.get(alias)
+        if not provider:
+            print(f"Unknown provider: {alias}")
+            print("Provider aliases: c=chutes, g=groq, o=openrouter, ge=gemini")
+            return False
+
+        agent.set_model(provider, model)
+        print(f"Switched to {provider} / {model}")
+        return False
 
     print(f"Unknown command: {command}")
     print("Type /help for available commands.")
@@ -147,7 +193,7 @@ async def process_input(
         messages = list(history) + [("user", user_input)]
 
         # Step 1: Classify intent
-        classification = await classify_intent(messages, provider="chutes")
+        classification = await classify_intent(messages, provider=agent.provider)
 
         # Clear status and show classification
         print("\r" + " " * 20 + "\r", end="")
@@ -224,7 +270,10 @@ async def check_cli() -> bool:
 
 async def run_repl() -> None:
     """Run the interactive REPL loop."""
-    print_banner()
+    session_id = f"repl-{uuid.uuid4().hex[:8]}"
+    agent = TaskAgent(session_id=session_id)
+
+    print_banner(agent)
 
     # Sanity check CLI before starting
     if not await check_cli():
@@ -232,8 +281,6 @@ async def run_repl() -> None:
         return
 
     print()
-    session_id = f"repl-{uuid.uuid4().hex[:8]}"
-    agent = TaskAgent(session_id=session_id)
     history: list[tuple[str, str]] = []
 
     while True:
@@ -244,7 +291,7 @@ async def run_repl() -> None:
                 continue
 
             if user_input.startswith("/"):
-                if handle_command(user_input):
+                if handle_command(user_input, agent):
                     break
                 continue
 

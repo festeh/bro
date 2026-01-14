@@ -17,6 +17,9 @@ enum LlmModel { glm47, mimoV2, minimax, kimiK2, deepseekV31 }
 
 enum AgentMode { chat, transcribe }
 
+/// LLM provider for TaskAgent (task management)
+enum TaskAgentProvider { chutes, groq, openrouter, gemini }
+
 class TranscriptionEvent {
   final String segmentId;
   final String text;
@@ -89,6 +92,7 @@ class LiveKitService {
   LlmModel _llmModel = LlmModel.deepseekV31;
   AgentMode _agentMode = AgentMode.chat;
   bool _ttsEnabled = true;
+  TaskAgentProvider _taskAgentProvider = TaskAgentProvider.groq;
 
   final _connectionStatusController =
       StreamController<ConnectionStatus>.broadcast();
@@ -118,6 +122,7 @@ class LiveKitService {
   LlmModel get llmModel => _llmModel;
   AgentMode get agentMode => _agentMode;
   bool get ttsEnabled => _ttsEnabled;
+  TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
 
   LiveKitService({TokenService? tokenService})
     : _tokenService = tokenService ?? TokenService();
@@ -210,12 +215,20 @@ class LiveKitService {
     _log.info('TTS enabled: $enabled');
   }
 
+  /// Change TaskAgent LLM provider
+  void setTaskAgentProvider(TaskAgentProvider provider) {
+    _taskAgentProvider = provider;
+    _updateMetadata();
+    _log.info('TaskAgent provider changed to: ${provider.name}');
+  }
+
   void _updateMetadata() {
     final metadata = jsonEncode({
       'stt_provider': _sttProvider.name,
       'llm_model': _llmModel.name,
       'agent_mode': _agentMode.name,
       'tts_enabled': _ttsEnabled,
+      'task_agent_provider': _taskAgentProvider.name,
     });
     _room?.localParticipant?.setMetadata(metadata);
   }
