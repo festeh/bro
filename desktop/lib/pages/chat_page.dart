@@ -32,6 +32,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isSessionActive = false;
   bool _isSessionLoading = false;
   bool _isSessionWarning = false;
+  late TaskAgentProvider _selectedProvider;
 
   // Live user message state
   String _liveUserText = '';
@@ -49,6 +50,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    _selectedProvider = widget.liveKitService.taskAgentProvider;
     _init();
   }
 
@@ -251,6 +253,12 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  void _onProviderChanged(TaskAgentProvider? provider) {
+    if (provider == null) return;
+    setState(() => _selectedProvider = provider);
+    widget.liveKitService.setTaskAgentProvider(provider);
+  }
+
   @override
   void dispose() {
     _connectionSub?.cancel();
@@ -300,13 +308,31 @@ class _ChatPageState extends State<ChatPage> {
                 ),
         ),
 
-        // Bottom bar with mic button and clear
+        // Bottom bar with mic button, clear, and provider selector
         Container(
           padding: const EdgeInsets.all(AppTokens.spacingMd),
           color: AppTokens.backgroundSecondary,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Provider dropdown
+              DropdownButton<TaskAgentProvider>(
+                value: _selectedProvider,
+                onChanged: _onProviderChanged,
+                dropdownColor: AppTokens.backgroundTertiary,
+                style: TextStyle(
+                  color: AppTokens.textPrimary,
+                  fontSize: AppTokens.fontSizeSm,
+                ),
+                underline: const SizedBox(),
+                items: TaskAgentProvider.values.map((provider) {
+                  return DropdownMenuItem(
+                    value: provider,
+                    child: Text(provider.name),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(width: AppTokens.spacingMd),
               IconButton(
                 icon: const Icon(Icons.delete_outline),
                 color: AppTokens.textSecondary,

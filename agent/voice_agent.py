@@ -64,6 +64,7 @@ LLM_MODELS = {
 DEFAULT_LLM_MODEL = "deepseekV31"
 DEFAULT_STT_PROVIDER = "deepgram"
 DEFAULT_TTS_ENABLED = True
+DEFAULT_TASK_AGENT_PROVIDER = "groq"
 
 
 
@@ -93,6 +94,7 @@ class ChatAgent(Agent):
         stt_provider: str = DEFAULT_STT_PROVIDER,
         llm_model: str = DEFAULT_LLM_MODEL,
         tts_enabled: bool = DEFAULT_TTS_ENABLED,
+        task_agent_provider: str = DEFAULT_TASK_AGENT_PROVIDER,
     ):
         super().__init__(
             instructions="You are a helpful voice assistant. Keep responses concise and conversational.",
@@ -110,6 +112,7 @@ class ChatAgent(Agent):
         self._session_monitor_task: asyncio.Task | None = None
         # Task agent for task management sub-flow
         self._task_agent: TaskAgent | None = None
+        self._task_agent_provider = task_agent_provider
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -259,7 +262,10 @@ class ChatAgent(Agent):
 
             # Create task agent if needed
             if not self._task_agent:
-                self._task_agent = TaskAgent(session_id=self._session_id)
+                self._task_agent = TaskAgent(
+                    session_id=self._session_id,
+                    provider=self._task_agent_provider,
+                )
 
             response = await self._task_agent.process_message(user_text)
             logger.info(f"Task agent response: {response.text[:100]}...")
@@ -316,6 +322,7 @@ def get_settings_from_metadata(ctx: JobContext) -> dict:
         "stt_provider": DEFAULT_STT_PROVIDER,
         "llm_model": DEFAULT_LLM_MODEL,
         "tts_enabled": DEFAULT_TTS_ENABLED,
+        "task_agent_provider": DEFAULT_TASK_AGENT_PROVIDER,
     }
 
     for participant in ctx.room.remote_participants.values():
@@ -456,6 +463,7 @@ async def entrypoint(ctx: JobContext):
                 stt_provider=s["stt_provider"],
                 llm_model=s["llm_model"],
                 tts_enabled=s["tts_enabled"],
+                task_agent_provider=s["task_agent_provider"],
             )
             agent.set_room(ctx.room)
             current_agent[0] = agent
@@ -472,8 +480,9 @@ async def entrypoint(ctx: JobContext):
         stt_changed = new_settings["stt_provider"] != old["stt_provider"]
         llm_changed = new_settings["llm_model"] != old["llm_model"]
         tts_changed = new_settings["tts_enabled"] != old["tts_enabled"]
+        task_provider_changed = new_settings["task_agent_provider"] != old["task_agent_provider"]
 
-        if not (mode_changed or stt_changed or llm_changed or tts_changed):
+        if not (mode_changed or stt_changed or llm_changed or tts_changed or task_provider_changed):
             return
 
         logger.info(f"Settings changed: {old} -> {new_settings}")
