@@ -62,7 +62,7 @@ class TestTaskAgentState:
         state = TaskAgentState(session_id="test-123")
         assert state.session_id == "test-123"
         assert state.messages == []
-        assert state.active is True
+        assert state.active is False  # Starts inactive, activated when entering TaskAgent context
         assert state.pending_command is None
 
     def test_state_with_messages(self):
@@ -94,15 +94,23 @@ class TestTaskAgentInit:
 class TestTaskAgentProperties:
     """Tests for TaskAgent properties."""
 
-    def test_is_active_true(self):
-        """Test is_active when active."""
+    def test_is_active_initially_false(self):
+        """Test is_active is False on creation (not in TaskAgent context yet)."""
         agent = TaskAgent(session_id="test")
+        assert agent.is_active is False
+
+    def test_is_active_after_activate(self):
+        """Test is_active is True after calling activate()."""
+        agent = TaskAgent(session_id="test")
+        agent.activate()
         assert agent.is_active is True
 
-    def test_is_active_false(self):
-        """Test is_active when inactive."""
+    def test_is_active_after_deactivate(self):
+        """Test is_active is False after calling deactivate()."""
         agent = TaskAgent(session_id="test")
-        agent._state.active = False
+        agent.activate()
+        assert agent.is_active is True
+        agent.deactivate()
         assert agent.is_active is False
 
     def test_is_active_no_state(self):

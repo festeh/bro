@@ -186,9 +186,27 @@ async def process_input(
 
     Returns True if REPL should exit.
     """
-    print("Classifying...", end="", flush=True)
-
     try:
+        # If TaskAgent is active, route directly to it (skip classification)
+        # This maintains context for follow-up messages like "complete it"
+        if agent.is_active:
+            print("[Router] → TaskAgent (in context)")
+            print("Processing...", end="", flush=True)
+
+            response = await agent.process_message(user_input)
+
+            print("\r" + " " * 20 + "\r", end="")
+            print("[TaskAgent]")
+            print(format_task_response(response, agent))
+            print()
+
+            history.append(("user", user_input))
+            history.append(("assistant", response.text))
+
+            return response.should_exit
+
+        print("Classifying...", end="", flush=True)
+
         # Build messages for classifier (includes history)
         messages = list(history) + [("user", user_input)]
 
@@ -202,6 +220,7 @@ async def process_input(
         # Step 2: Route based on intent
         if classification.intent == Intent.TASK_MANAGEMENT:
             print("[Router] → TaskAgent")
+            agent.activate()  # Enter TaskAgent context
             print("Processing...", end="", flush=True)
 
             response = await agent.process_message(user_input)

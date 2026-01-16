@@ -61,10 +61,20 @@ class AgentResponse:
     exit_reason: str | None = None
     """If set, return control to main agent with this reason."""
 
+    history_context: str | None = None
+    """Additional context to store in history (CLI command, results, etc.)."""
+
     @property
     def should_exit(self) -> bool:
         """Whether to return control to main agent."""
         return self.exit_reason is not None
+
+    @property
+    def history_text(self) -> str:
+        """Text to store in conversation history (includes context if available)."""
+        if self.history_context:
+            return f"{self.history_context}\n\n{self.text}"
+        return self.text
 
 
 @dataclass
@@ -81,7 +91,7 @@ class TaskAgentState:
 
     session_id: str
     messages: list[Message] = field(default_factory=list)
-    active: bool = True
+    active: bool = False
     pending_command: list[str] | None = None  # CLI args to execute on confirm
 
 
@@ -129,6 +139,16 @@ class TaskAgent:
     def is_active(self) -> bool:
         """Whether the task agent is currently handling the conversation."""
         return self._state is not None and self._state.active
+
+    def activate(self) -> None:
+        """Activate the task agent to handle subsequent messages."""
+        if self._state:
+            self._state.active = True
+
+    def deactivate(self) -> None:
+        """Deactivate the task agent, returning control to intent classification."""
+        if self._state:
+            self._state.active = False
 
     @property
     def has_pending(self) -> bool:
@@ -211,11 +231,14 @@ class TaskAgent:
 
         logger.info(f"LLM output: action={output.action}, cli_args={output.cli_args}")
 
-        # Add assistant response to history
-        self._state.messages.append(Message(role="assistant", content=output.response))
+        # Handle action and get actual response
+        response = await self._handle_action(output)
 
-        # Handle action
-        return await self._handle_action(output)
+        # Add assistant response to history (use history_text which includes context)
+        # This ensures query results with task IDs are in context for follow-ups
+        self._state.messages.append(Message(role="assistant", content=response.history_text))
+
+        return response
 
     async def _call_llm(self, messages: list) -> TaskAgentOutput:
         """Call LLM with structured output.
@@ -345,6 +368,8 @@ Guidelines:
                 # Execute read-only command immediately
                 if output.cli_args:
                     try:
+                        import json
+
                         self._last_cli_command = output.cli_args
                         result = await self._cli.run(*output.cli_args)
                         self._last_cli_result = result
@@ -355,7 +380,11 @@ Guidelines:
                             logger.info(f"Query returned {len(result)} items")
                         # Get LLM to summarize the results
                         summary = await self._summarize_query_results(result)
-                        return AgentResponse(text=summary)
+                        # Include CLI command and result in history for context
+                        cli_cmd = " ".join(output.cli_args)
+                        result_json = json.dumps(result, indent=2, default=str)
+                        history_context = f"[CLI: {cli_cmd}]\n[Result: {result_json}]"
+                        return AgentResponse(text=summary, history_context=history_context)
                     except Exception as e:
                         logger.error(f"Query failed: {e}")
                         return AgentResponse(text=f"Couldn't fetch tasks: {e}")
@@ -363,7 +392,7 @@ Guidelines:
 
             case Action.EXIT:
                 # End task management session
-                self._state.active = False
+                self.deactivate()
                 return AgentResponse(text=output.response, exit_reason="user_exit")
 
             case _:
