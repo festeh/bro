@@ -149,10 +149,12 @@ class ParamsPanel(Widget):
         self._session_id = ""
         self._is_active = False
         self._pending = None
+        self._log_level = "DEBUG"
 
     def compose(self) -> ComposeResult:
         yield Static("[bold]Parameters[/bold]", classes="panel-header")
         yield Static(id="param-model")
+        yield Static(id="param-log-level")
         yield Static(id="param-session")
         yield Static(id="param-active")
         yield Static(id="param-pending")
@@ -162,6 +164,7 @@ class ParamsPanel(Widget):
 
     def _update_display(self) -> None:
         self.query_one("#param-model", Static).update(f"Model: {self._model}")
+        self.query_one("#param-log-level", Static).update(f"Log: {self._log_level}")
         self.query_one("#param-session", Static).update(f"Session: {self._session_id[:8]}...")
         active_str = "[green]Yes[/green]" if self._is_active else "[dim]No[/dim]"
         self.query_one("#param-active", Static).update(f"Active: {active_str}")
@@ -182,4 +185,8 @@ class ParamsPanel(Widget):
 
     def set_pending(self, pending: str | None) -> None:
         self._pending = pending
+        self._update_display()
+
+    def set_log_level(self, log_level: str) -> None:
+        self._log_level = log_level
         self._update_display()

@@ -9,6 +9,23 @@ import structlog
 LOG_DIR = Path("/tmp/bro-logs")
 LOG_FILE = LOG_DIR / "teststand.log"
 
+# Add TRACE level below DEBUG
+TRACE = 5
+logging.addLevelName(TRACE, "TRACE")
+
+# Noisy libraries that should only log at TRACE level
+NOISY_LOGGERS = [
+    "httpcore",
+    "httpx",
+    "urllib3",
+    "openai",
+    "openai._base_client",
+    "anthropic",
+    "anthropic._base_client",
+    "langchain_core",
+    "langsmith",
+]
+
 
 def setup_file_logging(log_level: str = "DEBUG") -> Path:
     """Configure structlog to write to the test stand log file.
@@ -47,15 +64,42 @@ def setup_file_logging(log_level: str = "DEBUG") -> Path:
     )
 
     # Also configure standard library logging
+    numeric_level = TRACE if log_level.upper() == "TRACE" else getattr(logging, log_level.upper())
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
-        level=getattr(logging, log_level.upper()),
+        level=numeric_level,
         handlers=[logging.FileHandler(LOG_FILE, mode="a")],
         force=True,
     )
 
+    # Set noisy loggers to TRACE (they only show if log level is TRACE)
+    for logger_name in NOISY_LOGGERS:
+        logging.getLogger(logger_name).setLevel(TRACE)
+
     return LOG_FILE
+
+
+def set_log_level(log_level: str) -> None:
+    """Change the log level dynamically.
+
+    Args:
+        log_level: One of TRACE, DEBUG, INFO
+    """
+    numeric_level = TRACE if log_level.upper() == "TRACE" else getattr(logging, log_level.upper())
+
+    # Reconfigure structlog
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
+        cache_logger_on_first_use=False,
+    )
+
+    # Reconfigure root logger
+    logging.getLogger().setLevel(numeric_level)
+
+    # Noisy loggers always stay at TRACE
+    for logger_name in NOISY_LOGGERS:
+        logging.getLogger(logger_name).setLevel(TRACE)
 
 
 def get_log_file_path() -> Path:

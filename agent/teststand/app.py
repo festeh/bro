@@ -14,7 +14,7 @@ from agent.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 
-from .logging import get_log_file_path, setup_file_logging, tail_log_file
+from .logging import get_log_file_path, set_log_level, setup_file_logging, tail_log_file
 from .models import MODELS, Model, get_default_model, get_model_by_index
 from .widgets import ChatPanel, LogPanel, ParamsPanel
 
@@ -36,6 +36,7 @@ class HelpScreen(ModalScreen):
                 "  Y         Confirm pending action\n"
                 "  N         Decline pending action\n"
                 "  Ctrl+M    Cycle through models\n"
+                "  Ctrl+T    Cycle log level (TRACE/DEBUG/INFO)\n"
                 "  Ctrl+L    Clear all / new session\n"
                 "  Ctrl+H    Show this help\n"
                 "  Ctrl+C    Exit app\n"
@@ -134,16 +135,21 @@ class TestStandApp(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Exit", show=True),
         Binding("ctrl+m", "cycle_model", "Model", show=True),
+        Binding("ctrl+t", "cycle_log_level", "LogLvl", show=True),
         Binding("ctrl+l", "clear_all", "Clear", show=True),
         Binding("ctrl+h", "show_help", "Help", show=True),
         Binding("y", "confirm_pending", "Confirm", show=False),
         Binding("n", "decline_pending", "Decline", show=False),
     ]
 
+    LOG_LEVELS = ["TRACE", "DEBUG", "INFO"]
+
     def __init__(self) -> None:
         super().__init__()
         self._model_index = 0
         self._current_model: Model = get_default_model()
+        self._log_level_index = 1  # Default to DEBUG (index 1)
+        self._current_log_level = self.LOG_LEVELS[self._log_level_index]
         self._session_id = f"teststand-{uuid.uuid4().hex[:8]}"
         self._agent: TaskAgent | None = None
         self._history: list[tuple[str, str]] = []
@@ -161,8 +167,8 @@ class TestStandApp(App):
 
     async def on_mount(self) -> None:
         """Initialize when app starts."""
-        # Setup file logging
-        setup_file_logging()
+        # Setup file logging with default level (DEBUG)
+        setup_file_logging(self._current_log_level)
 
         # Create agent with current model
         self._agent = TaskAgent(
@@ -174,6 +180,7 @@ class TestStandApp(App):
         # Update params panel
         params = self.query_one(ParamsPanel)
         params.set_model(self._current_model.display_name)
+        params.set_log_level(self._current_log_level)
         params.set_session_id(self._session_id)
         params.set_active(False)
         params.set_pending(None)
@@ -316,6 +323,22 @@ class TestStandApp(App):
         # Show notification
         chat = self.query_one(ChatPanel)
         chat.add_message(f"[yellow]Switched to {self._current_model.display_name}[/yellow]")
+
+    def action_cycle_log_level(self) -> None:
+        """Cycle through log levels: TRACE -> DEBUG -> INFO -> TRACE."""
+        self._log_level_index = (self._log_level_index + 1) % len(self.LOG_LEVELS)
+        self._current_log_level = self.LOG_LEVELS[self._log_level_index]
+
+        # Update actual log level
+        set_log_level(self._current_log_level)
+
+        # Update params panel
+        params = self.query_one(ParamsPanel)
+        params.set_log_level(self._current_log_level)
+
+        # Show notification
+        chat = self.query_one(ChatPanel)
+        chat.add_message(f"[yellow]Log level: {self._current_log_level}[/yellow]")
 
     def action_clear_all(self) -> None:
         """Clear conversation and logs, start new session."""
