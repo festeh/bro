@@ -27,6 +27,9 @@ dependencies = [
     "structlog>=24.0.0",
     "rich>=13.0.0",
     "edge-tts>=7.0.0",
+    # Test stand TUI
+    "textual>=0.50.0",
+    "aiofiles>=24.0.0",
 ]
 
 [dependency-groups]
