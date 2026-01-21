@@ -73,9 +73,10 @@ def setup_file_logging(log_level: str = "DEBUG") -> Path:
         force=True,
     )
 
-    # Set noisy loggers to TRACE (they only show if log level is TRACE)
+    # Suppress noisy loggers unless at TRACE level
+    noisy_level = TRACE if log_level.upper() == "TRACE" else logging.WARNING
     for logger_name in NOISY_LOGGERS:
-        logging.getLogger(logger_name).setLevel(TRACE)
+        logging.getLogger(logger_name).setLevel(noisy_level)
 
     return LOG_FILE
 
@@ -97,9 +98,10 @@ def set_log_level(log_level: str) -> None:
     # Reconfigure root logger
     logging.getLogger().setLevel(numeric_level)
 
-    # Noisy loggers always stay at TRACE
+    # Suppress noisy loggers unless at TRACE level
+    noisy_level = TRACE if log_level.upper() == "TRACE" else logging.WARNING
     for logger_name in NOISY_LOGGERS:
-        logging.getLogger(logger_name).setLevel(TRACE)
+        logging.getLogger(logger_name).setLevel(noisy_level)
 
 
 def get_log_file_path() -> Path:
