@@ -88,10 +88,12 @@ def set_log_level(log_level: str) -> None:
         log_level: One of TRACE, DEBUG, INFO
     """
     numeric_level = TRACE if log_level.upper() == "TRACE" else getattr(logging, log_level.upper())
+    # structlog doesn't support custom levels, use DEBUG for TRACE
+    structlog_level = logging.DEBUG if log_level.upper() == "TRACE" else numeric_level
 
     # Reconfigure structlog
     structlog.configure(
-        wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
+        wrapper_class=structlog.make_filtering_bound_logger(structlog_level),
         cache_logger_on_first_use=False,
     )
 
