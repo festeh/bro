@@ -127,8 +127,8 @@ class TaskAgent:
 
     @property
     def current_datetime(self) -> str:
-        """Current date and time in local timezone (ISO format)."""
-        return datetime.now().astimezone().isoformat()
+        """Current date and time in local timezone (minute granularity)."""
+        return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
 
     @property
     def today(self) -> str:
@@ -229,7 +229,10 @@ class TaskAgent:
                 text="I'm having trouble processing that. Could you try again?"
             )
 
-        logger.info(f"LLM output: action={output.action}, cli_args={output.cli_args}")
+        logger.info(
+            f"LLM output: action={output.action}, cli_args={output.cli_args}, "
+            f"response={output.response[:100]}{'...' if len(output.response) > 100 else ''}"
+        )
 
         # Handle action and get actual response
         response = await self._handle_action(output)

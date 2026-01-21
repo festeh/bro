@@ -99,6 +99,12 @@ async def classify_intent(
 
     try:
         result = await classifier.ainvoke(classification_messages)
+        log.info(
+            "intent_classified",
+            intent=result.intent,
+            confidence=result.confidence,
+            response=result.response[:80] + "..." if len(result.response) > 80 else result.response,
+        )
         return result  # type: ignore[return-value]
     except Exception as e:
         log.error("classification_failed", error=str(e))

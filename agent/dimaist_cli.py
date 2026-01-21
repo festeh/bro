@@ -73,12 +73,15 @@ class DimaistCLI:
             raise CLIError(error_msg, returncode=proc.returncode or 1)
 
         output = stdout.decode().strip()
+        logger.debug(f"CLI raw output: {output}")
+
         if not output:
             return {}
 
         try:
             return json.loads(output)
         except json.JSONDecodeError as e:
+            logger.error(f"CLI raw output (parse failed): {output}")
             raise CLIError(f"Invalid JSON from CLI: {e}") from None
 
     async def get_help(self) -> str:
