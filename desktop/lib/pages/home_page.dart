@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../models/models_config.dart';
 import '../models/recording.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
@@ -49,7 +50,7 @@ class _HomePageState extends State<HomePage> {
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   SttProvider _sttProvider = SttProvider.deepgram;
-  LlmModel _llmModel = LlmModel.deepseekV31;
+  late Model _llmModel;
   bool _ttsEnabled = true;
   bool _isRecording = false;
   bool _isLoading = false;
@@ -70,6 +71,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _llmModel = ModelsConfig.instance.defaultLlm;
     _player = Player();
     _init();
   }
@@ -308,7 +310,7 @@ class _HomePageState extends State<HomePage> {
     widget.liveKitService.setSttProvider(provider);
   }
 
-  void _onLlmModelChanged(LlmModel model) {
+  void _onLlmModelChanged(Model model) {
     setState(() => _llmModel = model);
     widget.liveKitService.setLlmModel(model);
   }

@@ -5,6 +5,7 @@ import 'package:livekit_client/livekit_client.dart';
 import 'package:logging/logging.dart';
 
 import '../constants/livekit_constants.dart';
+import '../models/models_config.dart';
 import 'token_service.dart';
 
 final _log = Logger('LiveKitService');
@@ -12,8 +13,6 @@ final _log = Logger('LiveKitService');
 enum ConnectionStatus { disconnected, connecting, connected, error }
 
 enum SttProvider { deepgram, elevenlabs }
-
-enum LlmModel { glm47, mimoV2, minimax, kimiK2, deepseekV31 }
 
 enum AgentMode { chat, transcribe }
 
@@ -89,7 +88,7 @@ class LiveKitService {
   Room? _room;
   LocalAudioTrack? _audioTrack;
   SttProvider _sttProvider = SttProvider.deepgram;
-  LlmModel _llmModel = LlmModel.deepseekV31;
+  late Model _llmModel;
   AgentMode _agentMode = AgentMode.chat;
   bool _ttsEnabled = true;
   TaskAgentProvider _taskAgentProvider = TaskAgentProvider.groq;
@@ -119,13 +118,15 @@ class LiveKitService {
   bool get isConnected => _room?.connectionState == ConnectionState.connected;
   bool get isVoiceSessionActive => _audioTrack != null;
   SttProvider get sttProvider => _sttProvider;
-  LlmModel get llmModel => _llmModel;
+  Model get llmModel => _llmModel;
   AgentMode get agentMode => _agentMode;
   bool get ttsEnabled => _ttsEnabled;
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
 
   LiveKitService({TokenService? tokenService})
-    : _tokenService = tokenService ?? TokenService();
+    : _tokenService = tokenService ?? TokenService() {
+    _llmModel = ModelsConfig.instance.defaultLlm;
+  }
 
   Future<void> connect() async {
     if (_room != null) return;
@@ -195,7 +196,7 @@ class LiveKitService {
   }
 
   /// Change LLM model
-  void setLlmModel(LlmModel model) {
+  void setLlmModel(Model model) {
     _llmModel = model;
     _updateMetadata();
     _log.info('LLM model changed to: ${model.name}');
@@ -225,7 +226,7 @@ class LiveKitService {
   void _updateMetadata() {
     final metadata = jsonEncode({
       'stt_provider': _sttProvider.name,
-      'llm_model': _llmModel.name,
+      'llm_model': _llmModel.modelId,
       'agent_mode': _agentMode.name,
       'tts_enabled': _ttsEnabled,
       'task_agent_provider': _taskAgentProvider.name,

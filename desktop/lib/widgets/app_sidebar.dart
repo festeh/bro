@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/models_config.dart';
 import '../services/livekit_service.dart';
 import '../theme/tokens.dart';
 
@@ -10,8 +11,8 @@ class AppSidebar extends StatelessWidget {
   final ValueChanged<AppMode> onModeChanged;
   final SttProvider sttProvider;
   final ValueChanged<SttProvider> onSttProviderChanged;
-  final LlmModel llmModel;
-  final ValueChanged<LlmModel> onLlmModelChanged;
+  final Model llmModel;
+  final ValueChanged<Model> onLlmModelChanged;
   final bool ttsEnabled;
   final ValueChanged<bool> onTtsEnabledChanged;
 
@@ -73,12 +74,12 @@ class AppSidebar extends StatelessWidget {
                   itemLabel: _sttProviderLabel,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
-                _SettingDropdown<LlmModel>(
+                _SettingDropdown<Model>(
                   label: 'LLM',
                   value: llmModel,
-                  items: LlmModel.values,
+                  items: ModelsConfig.instance.llmModels,
                   onChanged: onLlmModelChanged,
-                  itemLabel: _llmModelLabel,
+                  itemLabel: (m) => m.displayName,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
                 _SettingToggle(
@@ -104,20 +105,6 @@ class AppSidebar extends StatelessWidget {
     }
   }
 
-  String _llmModelLabel(LlmModel model) {
-    switch (model) {
-      case LlmModel.glm47:
-        return 'GLM-4.7';
-      case LlmModel.mimoV2:
-        return 'MiMo-V2';
-      case LlmModel.minimax:
-        return 'MiniMax-M2.1';
-      case LlmModel.kimiK2:
-        return 'Kimi-K2';
-      case LlmModel.deepseekV31:
-        return 'DeepSeek-V3.1';
-    }
-  }
 }
 
 class _NavItem extends StatelessWidget {
