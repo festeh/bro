@@ -1,4 +1,5 @@
 const logDir = '/tmp/bro-logs';
+const projectDir = __dirname;
 
 module.exports = {
   apps: [
@@ -23,16 +24,16 @@ module.exports = {
       script: 'bash',
       args: '-c "sleep 2 && just lk-egress"',
       autorestart: false,
-      cwd: '/home/dima/projects/bro',
+      cwd: projectDir,
       out_file: `${logDir}/egress.log`,
       error_file: `${logDir}/egress.log`,
     },
     {
       name: 'agent',
       script: 'bash',
-      args: '-c "uv run --project agent python agent/voice_agent.py dev"',
+      args: '-c "PYTHONPATH=$PWD uv run python agent/voice_agent.py dev"',
       autorestart: true,
-      cwd: '/home/dima/projects/bro',
+      cwd: projectDir,
       out_file: `${logDir}/agent.log`,
       error_file: `${logDir}/agent.log`,
     },
@@ -41,7 +42,7 @@ module.exports = {
       script: 'bash',
       args: '-c "cd desktop && flutter run -d linux"',
       autorestart: false,
-      cwd: '/home/dima/projects/bro',
+      cwd: projectDir,
       out_file: `${logDir}/desktop.log`,
       error_file: `${logDir}/desktop.log`,
     },
