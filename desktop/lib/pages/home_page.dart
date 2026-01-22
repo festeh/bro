@@ -44,6 +44,7 @@ class _HomePageState extends State<HomePage> {
   final _uuid = const Uuid();
   final _waveformService = WaveformService();
 
+  final _chatPageKey = GlobalKey<ChatPageState>();
   AppMode _currentMode = AppMode.chat;
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
@@ -331,6 +332,13 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(_currentMode == AppMode.chat ? 'Chat' : 'Recordings'),
         actions: [
+          if (_currentMode == AppMode.chat)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: AppTokens.textSecondary,
+              onPressed: () => _chatPageKey.currentState?.clearChat(),
+              tooltip: 'Clear chat',
+            ),
           _ConnectionIndicator(status: _connectionStatus),
           const SizedBox(width: AppTokens.spacingMd),
         ],
@@ -349,7 +357,10 @@ class _HomePageState extends State<HomePage> {
           ),
           Expanded(
             child: _currentMode == AppMode.chat
-                ? ChatPage(liveKitService: widget.liveKitService)
+                ? ChatPage(
+                    key: _chatPageKey,
+                    liveKitService: widget.liveKitService,
+                  )
                 : _buildRecordingsContent(),
           ),
         ],
