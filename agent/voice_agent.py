@@ -35,6 +35,7 @@ from agent.constants import (
 from agent.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
+from ai.models_config import get_default_llm, get_llm_by_model_id, get_llm_models
 
 load_dotenv()
 
@@ -52,8 +53,8 @@ class NotificationType(StrEnum):
 
 logger = logging.getLogger("voice-agent")
 
-# LLM model mapping (Flutter enum name -> Chutes model ID)
-LLM_MODELS = {
+# Legacy mapping for old Flutter enum names -> model_id (for backward compatibility)
+_LEGACY_MODEL_KEYS = {
     "glm47": "zai-org/GLM-4.7-TEE",
     "mimoV2": "XiaomiMiMo/MiMo-V2-Flash",
     "minimax": "MiniMaxAI/MiniMax-M2.1-TEE",
@@ -61,11 +62,10 @@ LLM_MODELS = {
     "deepseekV31": "deepseek-ai/DeepSeek-V3.1-Terminus-TEE",
 }
 
-DEFAULT_LLM_MODEL = "deepseekV31"
+DEFAULT_LLM_MODEL = get_default_llm().model_id
 DEFAULT_STT_PROVIDER = "deepgram"
 DEFAULT_TTS_ENABLED = True
 DEFAULT_TASK_AGENT_PROVIDER = "groq"
-
 
 
 def create_stt(provider: str):
@@ -77,12 +77,26 @@ def create_stt(provider: str):
 
 
 def create_llm(model_key: str):
-    """Create LLM instance based on model key."""
-    model_id = LLM_MODELS.get(model_key, LLM_MODELS[DEFAULT_LLM_MODEL])
+    """Create LLM instance based on model key or model_id."""
+    # Try legacy mapping first (for old Flutter enum names)
+    model_id = _LEGACY_MODEL_KEYS.get(model_key)
+
+    if model_id:
+        # Found in legacy mapping, look up full model config
+        model = get_llm_by_model_id(model_id)
+    else:
+        # Assume it's a model_id directly
+        model = get_llm_by_model_id(model_key)
+
+    if not model:
+        # Fallback to default
+        logger.warning(f"Unknown model key: {model_key}, using default")
+        model = get_default_llm()
+
     return openai.LLM(
-        model=model_id,
-        base_url="https://llm.chutes.ai/v1",
-        api_key=os.environ.get("CHUTES_API_KEY", ""),
+        model=model.model_id,
+        base_url=model.base_url,
+        api_key=model.api_key,
     )
 
 

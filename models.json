@@ -1,0 +1,97 @@
+{
+  "providers": {
+    "groq": {
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_env": "GROQ_API_KEY"
+    },
+    "chutes": {
+      "base_url": "https://llm.chutes.ai/v1",
+      "api_key_env": "CHUTES_API_KEY"
+    },
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY"
+    },
+    "gemini": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "api_key_env": "GEMINI_API_KEY"
+    },
+    "deepgram": {
+      "api_key_env": "DEEPGRAM_API_KEY"
+    },
+    "elevenlabs": {
+      "api_key_env": "ELEVENLABS_API_KEY"
+    }
+  },
+  "llm": [
+    {
+      "name": "Qwen3 32B",
+      "provider": "groq",
+      "model_id": "qwen/qwen3-32b"
+    },
+    {
+      "name": "DeepSeek V3",
+      "provider": "chutes",
+      "model_id": "deepseek-ai/DeepSeek-V3-0324"
+    },
+    {
+      "name": "DeepSeek V3.1",
+      "provider": "chutes",
+      "model_id": "deepseek-ai/DeepSeek-V3.1-Terminus-TEE"
+    },
+    {
+      "name": "Kimi K2",
+      "provider": "chutes",
+      "model_id": "moonshotai/Kimi-K2-Thinking-TEE"
+    },
+    {
+      "name": "GLM 4.7",
+      "provider": "chutes",
+      "model_id": "zai-org/GLM-4.7-TEE"
+    },
+    {
+      "name": "MiMo V2",
+      "provider": "chutes",
+      "model_id": "XiaomiMiMo/MiMo-V2-Flash"
+    },
+    {
+      "name": "MiniMax M2.1",
+      "provider": "chutes",
+      "model_id": "MiniMaxAI/MiniMax-M2.1-TEE"
+    },
+    {
+      "name": "DeepSeek V3.2",
+      "provider": "openrouter",
+      "model_id": "deepseek/deepseek-v3.2"
+    },
+    {
+      "name": "GLM 4.7",
+      "provider": "openrouter",
+      "model_id": "z-ai/glm-4.7"
+    },
+    {
+      "name": "Gemini 2.0 Flash",
+      "provider": "gemini",
+      "model_id": "gemini-2.0-flash"
+    }
+  ],
+  "asr": [
+    {
+      "name": "Deepgram Nova 3",
+      "provider": "deepgram",
+      "model_id": "nova-3"
+    },
+    {
+      "name": "ElevenLabs",
+      "provider": "elevenlabs",
+      "model_id": "eleven_turbo_v2_5"
+    }
+  ],
+  "tts": [
+    {
+      "name": "ElevenLabs",
+      "provider": "elevenlabs",
+      "model_id": "eleven_turbo_v2_5"
+    }
+  ]
+}

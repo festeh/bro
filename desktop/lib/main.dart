@@ -5,6 +5,7 @@ import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 
+import 'models/models_config.dart';
 import 'pages/home_page.dart';
 import 'services/egress_service.dart';
 import 'services/livekit_service.dart';
@@ -27,6 +28,9 @@ void main() async {
 
   // Initialize media_kit for Linux audio playback
   MediaKit.ensureInitialized();
+
+  // Load model configuration from asset
+  await ModelsConfig.load();
 
   // Recordings directory - must match the egress mount in justfile
   final cwd = Directory.current.path;

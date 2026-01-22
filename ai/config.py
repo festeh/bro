@@ -37,27 +37,20 @@ settings = Settings()
 
 
 def get_provider_config(provider: str) -> dict:
-    """Get LLM config for a specific provider."""
-    presets = {
-        "groq": {
-            "base_url": "https://api.groq.com/openai/v1",
-            "api_key": settings.groq_api_key,
-            "model": "qwen/qwen3-32b",
-        },
-        "chutes": {
-            "base_url": "https://llm.chutes.ai/v1",
-            "api_key": settings.chutes_api_key,
-            "model": "deepseek-ai/DeepSeek-V3-0324",
-        },
-        "openrouter": {
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": settings.openrouter_api_key,
-            "model": "deepseek/deepseek-v3.2",
-        },
-        "gemini": {
-            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-            "api_key": settings.gemini_api_key,
-            "model": "gemini-2.0-flash",
-        },
+    """Get LLM config for a specific provider.
+
+    Uses models_config as source of truth.
+    """
+    from ai.models_config import get_llm_models, get_provider
+
+    provider_config = get_provider(provider)
+
+    # Find first model for this provider
+    models = get_llm_models()
+    default_model = next((m for m in models if m.provider == provider), models[0])
+
+    return {
+        "base_url": provider_config.base_url,
+        "api_key": provider_config.api_key,
+        "model": default_model.model_id,
     }
-    return presets.get(provider, presets["groq"])

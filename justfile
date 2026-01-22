@@ -98,12 +98,18 @@ phone-build:
 # Desktop
 # ─────────────────────────────────────────────────────────────
 
+# Sync models.json to app assets
+sync-models:
+    mkdir -p desktop/assets
+    cp models.json desktop/assets/models.json
+    @echo "Synced models.json to desktop/assets/"
+
 # Run desktop app
-desktop:
+desktop: sync-models
     cd desktop && flutter run -d linux
 
 # Build desktop app
-desktop-build:
+desktop-build: sync-models
     cd desktop && flutter build linux
 
 # ─────────────────────────────────────────────────────────────
