@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
 import '../services/livekit_service.dart';
 import '../theme/tokens.dart';
-import '../widgets/record_button.dart';
 
 final _log = Logger('ChatPage');
 
@@ -20,19 +20,19 @@ class ChatPage extends StatefulWidget {
   });
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ChatPage> createState() => ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class ChatPageState extends State<ChatPage> {
   final _uuid = const Uuid();
   final _scrollController = ScrollController();
+  final _textController = TextEditingController();
+  final _textFocusNode = FocusNode();
 
   List<ChatMessage> _messages = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   bool _isSessionActive = false;
   bool _isSessionLoading = false;
-  bool _isSessionWarning = false;
-  late TaskAgentProvider _selectedProvider;
 
   // Live user message state
   String _liveUserText = '';
@@ -50,7 +50,6 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _selectedProvider = widget.liveKitService.taskAgentProvider;
     _init();
   }
 
@@ -112,8 +111,7 @@ class _ChatPageState extends State<ChatPage> {
         }
         _liveUserText = _accumulatedFinals;
 
-        // User turn is complete - reset warning and finalize
-        _isSessionWarning = false;
+        // User turn is complete - finalize
         _finalizeUserMessage();
         _pendingAssistantMessage = ''; // Empty = show "..." thinking indicator
       } else {
@@ -140,15 +138,12 @@ class _ChatPageState extends State<ChatPage> {
         _isSessionLoading = false;
         _isSessionActive = true;
       });
-    } else if (event.type == SessionNotificationType.sessionWarning) {
-      setState(() => _isSessionWarning = true);
     } else if (event.type == SessionNotificationType.sessionTimeout) {
       _log.info('Session timeout');
       widget.liveKitService.stopVoiceSession();
       setState(() {
         _isSessionActive = false;
         _isSessionLoading = false;
-        _isSessionWarning = false;
       });
     }
   }
@@ -227,7 +222,6 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _isSessionActive = false;
         _isSessionLoading = false;
-        _isSessionWarning = false;
       });
     } else {
       // Start session - show loading, wait for session_ready notification
@@ -242,7 +236,9 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  void _clearChat() {
+  bool get hasMessages => _messages.isNotEmpty;
+
+  void clearChat() {
     setState(() {
       _messages = [];
       _liveUserText = '';
@@ -253,10 +249,26 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  void _onProviderChanged(TaskAgentProvider? provider) {
-    if (provider == null) return;
-    setState(() => _selectedProvider = provider);
-    widget.liveKitService.setTaskAgentProvider(provider);
+  void _submitTextMessage() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    _addMessage(text, isUser: true);
+    _textController.clear();
+    _textFocusNode.requestFocus();
+
+    // TODO: Send to agent via LiveKit or other mechanism
+    _log.info('Text message submitted: $text');
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        HardwareKeyboard.instance.isControlPressed) {
+      _submitTextMessage();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -266,6 +278,8 @@ class _ChatPageState extends State<ChatPage> {
     _immediateTextSub?.cancel();
     _sessionNotificationSub?.cancel();
     _scrollController.dispose();
+    _textController.dispose();
+    _textFocusNode.dispose();
     super.dispose();
   }
 
@@ -308,45 +322,75 @@ class _ChatPageState extends State<ChatPage> {
                 ),
         ),
 
-        // Bottom bar with mic button, clear, and provider selector
+        // Bottom bar with mic, text input, and send button
         Container(
           padding: const EdgeInsets.all(AppTokens.spacingMd),
           color: AppTokens.backgroundSecondary,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Provider dropdown
-              DropdownButton<TaskAgentProvider>(
-                value: _selectedProvider,
-                onChanged: _onProviderChanged,
-                dropdownColor: AppTokens.backgroundTertiary,
-                style: TextStyle(
-                  color: AppTokens.textPrimary,
-                  fontSize: AppTokens.fontSizeSm,
-                ),
-                underline: const SizedBox(),
-                items: TaskAgentProvider.values.map((provider) {
-                  return DropdownMenuItem(
-                    value: provider,
-                    child: Text(provider.name),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(width: AppTokens.spacingMd),
+              // Mic button (left)
               IconButton(
-                icon: const Icon(Icons.delete_outline),
-                color: AppTokens.textSecondary,
-                onPressed: _messages.isNotEmpty ? _clearChat : null,
-                tooltip: 'Clear chat',
-              ),
-              const SizedBox(width: AppTokens.spacingMd),
-              RecordButton(
-                isRecording: _isSessionActive,
-                isLoading: _isSessionLoading,
-                isWarning: _isSessionWarning,
+                icon: Icon(
+                  _isSessionActive ? Icons.stop : Icons.mic,
+                  size: 24,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: _isSessionActive
+                      ? AppTokens.accentRecording
+                      : AppTokens.accentPrimary,
+                  foregroundColor: AppTokens.textPrimary,
+                  fixedSize: const Size(40, 40),
+                ),
                 onPressed: _connectionStatus == ConnectionStatus.connected
                     ? _toggleSession
                     : null,
+                tooltip: _isSessionActive ? 'Stop' : 'Voice input',
+              ),
+              const SizedBox(width: AppTokens.spacingSm),
+              // Text input field
+              Expanded(
+                child: Focus(
+                  focusNode: _textFocusNode,
+                  onKeyEvent: _handleKeyEvent,
+                  child: TextField(
+                    controller: _textController,
+                    style: TextStyle(
+                      color: AppTokens.textPrimary,
+                      fontSize: AppTokens.fontSizeMd,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: TextStyle(
+                        color: AppTokens.textTertiary,
+                        fontSize: AppTokens.fontSizeMd,
+                      ),
+                      filled: true,
+                      fillColor: AppTokens.backgroundTertiary,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppTokens.spacingMd,
+                        vertical: AppTokens.spacingSm,
+                      ),
+                    ),
+                    maxLines: null,
+                    textInputAction: TextInputAction.newline,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTokens.spacingSm),
+              // Send button (right)
+              IconButton(
+                icon: const Icon(Icons.send, size: 24),
+                style: IconButton.styleFrom(
+                  backgroundColor: AppTokens.accentPrimary,
+                  foregroundColor: AppTokens.textPrimary,
+                  fixedSize: const Size(40, 40),
+                ),
+                onPressed: _submitTextMessage,
+                tooltip: 'Send (Ctrl+Enter)',
               ),
             ],
           ),
@@ -378,7 +422,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppTokens.spacingSm),
           Text(
-            'Press the mic button and speak',
+            'Type a message or use the mic',
             style: TextStyle(
               color: AppTokens.textTertiary,
               fontSize: AppTokens.fontSizeMd,
