@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # LLM Configuration
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "qwen/qwen3-32b"
 
     # Provider-specific API keys
     groq_api_key: str = ""
@@ -42,7 +42,7 @@ def get_provider_config(provider: str) -> dict:
         "groq": {
             "base_url": "https://api.groq.com/openai/v1",
             "api_key": settings.groq_api_key,
-            "model": "llama-3.3-70b-versatile",
+            "model": "qwen/qwen3-32b",
         },
         "chutes": {
             "base_url": "https://llm.chutes.ai/v1",
@@ -52,7 +52,7 @@ def get_provider_config(provider: str) -> dict:
         "openrouter": {
             "base_url": "https://openrouter.ai/api/v1",
             "api_key": settings.openrouter_api_key,
-            "model": "meta-llama/llama-3.3-70b-instruct",
+            "model": "deepseek/deepseek-v3.2",
         },
         "gemini": {
             "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",

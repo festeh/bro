@@ -25,13 +25,6 @@ class Model:
 MODELS: list[Model] = [
     # Groq
     Model(
-        name="llama-3.3-70b",
-        provider="groq",
-        model_id="llama-3.3-70b-versatile",
-        base_url="https://api.groq.com/openai/v1",
-        api_key=settings.groq_api_key,
-    ),
-    Model(
         name="qwen3-32b",
         provider="groq",
         model_id="qwen/qwen3-32b",
@@ -69,9 +62,16 @@ MODELS: list[Model] = [
     ),
     # OpenRouter
     Model(
-        name="llama-3.3-70b",
+        name="deepseek-v3.2",
         provider="openrouter",
-        model_id="meta-llama/llama-3.3-70b-instruct",
+        model_id="deepseek/deepseek-v3.2",
+        base_url="https://openrouter.ai/api/v1",
+        api_key=settings.openrouter_api_key,
+    ),
+    Model(
+        name="glm-4.7",
+        provider="openrouter",
+        model_id="z-ai/glm-4.7",
         base_url="https://openrouter.ai/api/v1",
         api_key=settings.openrouter_api_key,
     ),
