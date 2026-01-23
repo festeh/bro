@@ -38,13 +38,13 @@ module.exports = {
       error_file: `${logDir}/agent.log`,
     },
     {
-      name: 'desktop',
+      name: 'app',
       script: 'bash',
-      args: '-c "cd desktop && flutter run -d linux"',
+      args: '-c "cd app && flutter run -d linux"',
       autorestart: false,
       cwd: projectDir,
-      out_file: `${logDir}/desktop.log`,
-      error_file: `${logDir}/desktop.log`,
+      out_file: `${logDir}/app.log`,
+      error_file: `${logDir}/app.log`,
     },
   ],
 };

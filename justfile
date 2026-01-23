@@ -66,21 +66,31 @@ wear-logs:
     adb logcat | grep -E "(BroWear|flutter|Fatal|FATAL|Exception)"
 
 # ─────────────────────────────────────────────────────────────
-# Phone
+# App (unified bro app - Linux + Android)
 # ─────────────────────────────────────────────────────────────
 
-# Run phone app on emulator (finds first emulator device)
-phone:
+# Sync models.json to app assets
+sync-models:
+    mkdir -p app/assets
+    cp models.json app/assets/models.json
+    @echo "Synced models.json to app/assets/"
+
+# Run app on Linux desktop
+app: sync-models
+    cd app && flutter run -d linux
+
+# Run app on Android emulator
+app-android: sync-models
     #!/usr/bin/env bash
     device=$(adb devices | grep emulator | head -1 | cut -f1)
     if [ -z "$device" ]; then
         echo "No emulator found. Run 'just emu-phone' first."
         exit 1
     fi
-    cd phone && flutter run -d "$device"
+    cd app && flutter run -d "$device"
 
-# Run phone app on real Android device (A065)
-phone-device:
+# Run app on real Android device (A065)
+app-device: sync-models
     #!/usr/bin/env bash
     device=$(flutter devices 2>/dev/null | grep "A065" | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
     if [ -z "$device" ]; then
@@ -88,29 +98,15 @@ phone-device:
         exit 1
     fi
     echo "Running on device: $device"
-    cd phone && flutter run -d "$device"
+    cd app && flutter run -d "$device"
 
-# Build phone APK
-phone-build:
-    cd phone && flutter build apk --debug
+# Build Linux desktop app
+app-build-linux: sync-models
+    cd app && flutter build linux
 
-# ─────────────────────────────────────────────────────────────
-# Desktop
-# ─────────────────────────────────────────────────────────────
-
-# Sync models.json to app assets
-sync-models:
-    mkdir -p desktop/assets
-    cp models.json desktop/assets/models.json
-    @echo "Synced models.json to desktop/assets/"
-
-# Run desktop app
-desktop: sync-models
-    cd desktop && flutter run -d linux
-
-# Build desktop app
-desktop-build: sync-models
-    cd desktop && flutter build linux
+# Build Android APK
+app-build-android: sync-models
+    cd app && flutter build apk --debug
 
 # ─────────────────────────────────────────────────────────────
 # LiveKit Server Stack (for desktop app)
@@ -179,25 +175,22 @@ backend-status:
 # Get all dependencies
 deps:
     cd wear && flutter pub get
-    cd phone && flutter pub get
-    cd desktop && flutter pub get
+    cd app && flutter pub get
 
 # Clean builds
 clean:
     cd wear && flutter clean
-    cd phone && flutter clean
-    cd desktop && flutter clean
+    cd app && flutter clean
 
 # Lint
 lint:
     cd wear && flutter analyze
-    cd desktop && flutter analyze
+    cd app && flutter analyze
 
 # Format code
 fmt:
     cd wear && dart format lib/
-    cd phone && dart format lib/
-    cd desktop && dart format lib/
+    cd app && dart format lib/
 
 # ─────────────────────────────────────────────────────────────
 # Python (shared monorepo)
