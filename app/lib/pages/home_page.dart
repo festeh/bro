@@ -49,6 +49,7 @@ class _HomePageState extends State<HomePage> {
   AppMode _currentMode = AppMode.chat;
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
+  bool _isAgentConnected = false;
   SttProvider _sttProvider = SttProvider.deepgram;
   late Model _llmModel;
   bool _ttsEnabled = true;
@@ -64,6 +65,7 @@ class _HomePageState extends State<HomePage> {
 
   StreamSubscription<List<Recording>>? _recordingsSub;
   StreamSubscription<ConnectionStatus>? _connectionSub;
+  StreamSubscription<bool>? _agentConnectedSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<bool>? _playingStateSub;
   StreamSubscription<TranscriptionEvent>? _transcriptionSub;
@@ -89,6 +91,12 @@ class _HomePageState extends State<HomePage> {
     _connectionSub = widget.liveKitService.connectionStatus.listen((status) {
       if (!mounted) return;
       setState(() => _connectionStatus = status);
+    });
+
+    // Subscribe to agent connection status
+    _agentConnectedSub = widget.liveKitService.agentConnectedStream.listen((connected) {
+      if (!mounted) return;
+      setState(() => _isAgentConnected = connected);
     });
 
     // Subscribe to audio player position
@@ -300,6 +308,7 @@ class _HomePageState extends State<HomePage> {
     // Cancel other subscriptions
     _recordingsSub?.cancel();
     _connectionSub?.cancel();
+    _agentConnectedSub?.cancel();
     _transcriptionSub?.cancel();
     _recordingTimer?.cancel();
     super.dispose();
@@ -352,7 +361,10 @@ class _HomePageState extends State<HomePage> {
               onPressed: () => _chatPageKey.currentState?.clearChat(),
               tooltip: 'Clear chat',
             ),
-          _ConnectionIndicator(status: _connectionStatus),
+          _ConnectionIndicator(
+              status: _connectionStatus,
+              isAgentConnected: _isAgentConnected,
+            ),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
@@ -392,7 +404,10 @@ class _HomePageState extends State<HomePage> {
             onPressed: _showSettingsSheet,
             tooltip: 'Settings',
           ),
-          _ConnectionIndicator(status: _connectionStatus),
+          _ConnectionIndicator(
+              status: _connectionStatus,
+              isAgentConnected: _isAgentConnected,
+            ),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
@@ -491,31 +506,43 @@ class _HomePageState extends State<HomePage> {
 
 class _ConnectionIndicator extends StatelessWidget {
   final ConnectionStatus status;
+  final bool isAgentConnected;
 
-  const _ConnectionIndicator({required this.status});
+  const _ConnectionIndicator({
+    required this.status,
+    required this.isAgentConnected,
+  });
 
   @override
   Widget build(BuildContext context) {
     Color color;
     String tooltip;
 
-    switch (status) {
-      case ConnectionStatus.connected:
-        color = AppTokens.accentSuccess;
-        tooltip = 'Connected';
-        break;
-      case ConnectionStatus.connecting:
-        color = AppTokens.accentPrimary;
-        tooltip = 'Connecting...';
-        break;
-      case ConnectionStatus.error:
-        color = AppTokens.accentRecording;
-        tooltip = 'Connection error';
-        break;
-      case ConnectionStatus.disconnected:
-        color = AppTokens.textTertiary;
-        tooltip = 'Disconnected';
-        break;
+    if (status != ConnectionStatus.connected) {
+      // Not connected to LiveKit
+      switch (status) {
+        case ConnectionStatus.connecting:
+          color = AppTokens.accentPrimary;
+          tooltip = 'Connecting to server...';
+          break;
+        case ConnectionStatus.error:
+          color = AppTokens.accentRecording;
+          tooltip = 'Connection error';
+          break;
+        case ConnectionStatus.disconnected:
+        case ConnectionStatus.connected: // Won't reach here
+          color = AppTokens.textTertiary;
+          tooltip = 'Disconnected';
+          break;
+      }
+    } else if (!isAgentConnected) {
+      // Connected to LiveKit but agent not present
+      color = AppTokens.accentPrimary;
+      tooltip = 'Waiting for agent...';
+    } else {
+      // Connected and agent present
+      color = AppTokens.accentSuccess;
+      tooltip = 'Agent connected';
     }
 
     return Tooltip(

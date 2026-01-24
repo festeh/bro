@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:livekit_client/livekit_client.dart';
 import 'package:logging/logging.dart';
+import 'package:uuid/uuid.dart';
 
 import '../constants/livekit_constants.dart';
 import '../models/models_config.dart';
@@ -81,8 +82,8 @@ class SessionNotificationEvent {
 
 class LiveKitService {
   static const String _wsUrl = 'ws://localhost:7880';
-  static const String _roomName = 'voice-recorder';
   static const String _identity = 'desktop-user';
+  late final String _roomName;
 
   final TokenService _tokenService;
   Room? _room;
@@ -102,6 +103,8 @@ class LiveKitService {
       StreamController<ImmediateTextEvent>.broadcast();
   final _sessionNotificationController =
       StreamController<SessionNotificationEvent>.broadcast();
+  final _agentConnectedController = StreamController<bool>.broadcast();
+  bool _isAgentConnected = false;
 
   Stream<ConnectionStatus> get connectionStatus =>
       _connectionStatusController.stream;
@@ -112,6 +115,8 @@ class LiveKitService {
       _immediateTextController.stream;
   Stream<SessionNotificationEvent> get sessionNotificationStream =>
       _sessionNotificationController.stream;
+  Stream<bool> get agentConnectedStream => _agentConnectedController.stream;
+  bool get isAgentConnected => _isAgentConnected;
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
@@ -124,8 +129,10 @@ class LiveKitService {
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
 
   LiveKitService({TokenService? tokenService})
-    : _tokenService = tokenService ?? TokenService() {
+    : _tokenService = tokenService ?? TokenService(),
+      _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
     _llmModel = ModelsConfig.instance.defaultLlm;
+    _log.info('Created session with room: $_roomName');
   }
 
   Future<void> connect() async {
@@ -151,7 +158,33 @@ class LiveKitService {
 
       _room!.addListener(_onRoomEvent);
 
+      // Listen for participant events to track agent presence
+      _room!.events.on<ParticipantConnectedEvent>((event) {
+        if (event.participant.identity.contains('agent')) {
+          _log.info('Agent connected: ${event.participant.identity}');
+          _isAgentConnected = true;
+          _agentConnectedController.add(true);
+        }
+      });
+      _room!.events.on<ParticipantDisconnectedEvent>((event) {
+        if (event.participant.identity.contains('agent')) {
+          _log.info('Agent disconnected: ${event.participant.identity}');
+          _isAgentConnected = false;
+          _agentConnectedController.add(false);
+        }
+      });
+
       await _room!.connect(_wsUrl, token);
+
+      // Check if agent is already in the room
+      for (final participant in _room!.remoteParticipants.values) {
+        if (participant.identity.contains('agent')) {
+          _log.info('Agent already in room: ${participant.identity}');
+          _isAgentConnected = true;
+          _agentConnectedController.add(true);
+          break;
+        }
+      }
 
       // Register transcription handlers
       _room!.registerTextStreamHandler(
@@ -185,6 +218,8 @@ class LiveKitService {
     await _room?.disconnect();
     _room?.removeListener(_onRoomEvent);
     _room = null;
+    _isAgentConnected = false;
+    _agentConnectedController.add(false);
     _connectionStatusController.add(ConnectionStatus.disconnected);
   }
 
@@ -375,6 +410,22 @@ class LiveKitService {
     _log.info('Voice session stopped');
   }
 
+  /// Send a text message to the agent (bypasses voice session)
+  Future<void> sendTextMessage(String text) async {
+    if (_room == null || !isConnected) {
+      _log.warning('Cannot send text message: not connected');
+      return;
+    }
+
+    _log.info('Sending text message: ${text.length} chars');
+    final writer = await _room!.localParticipant!.streamText(
+      StreamTextOptions(topic: LiveKitTopics.textInput),
+    );
+    await writer.write(text);
+    await writer.close();
+    _log.fine('Text message sent');
+  }
+
   void _onRoomEvent() {
     // Handle room events if needed
   }
@@ -386,5 +437,6 @@ class LiveKitService {
     _transcriptionController.close();
     _immediateTextController.close();
     _sessionNotificationController.close();
+    _agentConnectedController.close();
   }
 }

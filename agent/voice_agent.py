@@ -1,13 +1,14 @@
 import asyncio
 import json
 import logging
-import os
 import time
 import uuid
 from collections.abc import AsyncIterable
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 from livekit import rtc
 from livekit.agents import (
     Agent,
@@ -30,12 +31,13 @@ from agent.constants import (
     ATTR_SEGMENT_ID,
     ATTR_TRANSCRIPTION_FINAL,
     TOPIC_LLM_STREAM,
+    TOPIC_TEXT_INPUT,
     TOPIC_VAD_STATUS,
 )
 from agent.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
-from ai.models_config import get_default_llm, get_llm_by_model_id, get_llm_models
+from ai.models_config import get_default_llm, get_llm_by_model_id
 
 load_dotenv()
 
@@ -364,6 +366,22 @@ def get_settings_from_metadata(ctx: JobContext) -> dict:
     return settings
 
 
+@dataclass
+class SessionState:
+    """Mutable state for an agent session."""
+
+    settings: dict = field(default_factory=dict)
+    agent: "ChatAgent | None" = None
+    session: AgentSession | None = None
+
+    def update_settings(self, new_settings: dict) -> bool:
+        """Update settings and return True if changed."""
+        if new_settings == self.settings:
+            return False
+        self.settings = new_settings.copy()
+        return True
+
+
 server = AgentServer()
 
 
@@ -375,46 +393,155 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
+async def process_text_input(
+    room: rtc.Room,
+    text: str,
+    llm_model: str,
+    tts_enabled: bool,
+) -> None:
+    """Process text input from client, respond via LLM and optionally TTS."""
+    segment_id = f"TEXT_{uuid.uuid4().hex[:8]}"
+    logger.info(f"Processing text input: {text[:50]}... (tts={tts_enabled})")
+
+    # Get model config and create langchain LLM
+    model = get_llm_by_model_id(llm_model)
+    if not model:
+        model = get_default_llm()
+    llm = ChatOpenAI(
+        base_url=model.base_url,
+        api_key=model.api_key,
+        model=model.model_id,
+        streaming=True,
+    )
+    messages = [("user", text)]
+
+    # Stream response to lk.llm_stream
+    full_response = ""
+    writer = await room.local_participant.stream_text(
+        topic=TOPIC_LLM_STREAM,
+        attributes={
+            ATTR_SEGMENT_ID: segment_id,
+            ATTR_TRANSCRIPTION_FINAL: "false",
+        },
+    )
+
+    try:
+        async for chunk in llm.astream(messages):
+            if chunk.content:
+                full_response += chunk.content
+                await writer.write(chunk.content)
+    finally:
+        await writer.aclose()
+
+    logger.info(f"Text response complete: {len(full_response)} chars")
+
+    # TTS if enabled
+    if tts_enabled and full_response:
+        try:
+            tts = elevenlabs.TTS()
+            audio_stream = tts.synthesize(full_response)
+            # Publish audio to room
+            source = rtc.AudioSource(sample_rate=24000, num_channels=1)
+            track = rtc.LocalAudioTrack.create_audio_track("tts_response", source)
+            await room.local_participant.publish_track(track)
+
+            async for frame in audio_stream:
+                await source.capture_frame(frame.frame)
+
+            await room.local_participant.unpublish_track(track.sid)
+            logger.info("TTS playback complete")
+        except Exception as e:
+            logger.warning(f"TTS failed: {e}")
+
+
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     logger.info(f"Starting voice agent for room: {ctx.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
-    settings = get_settings_from_metadata(ctx)
-    logger.info(f"Initial settings: {settings}")
+    initial_settings = get_settings_from_metadata(ctx)
+    logger.info(f"Initial settings: {initial_settings}")
 
-    session = AgentSession(
-        vad=ctx.proc.userdata["vad"],
-        turn_detection=MultilingualModel(),
-        preemptive_generation=True,
+    # Session state - single object holds all mutable state
+    state = SessionState(
+        settings=initial_settings.copy(),
+        session=AgentSession(
+            vad=ctx.proc.userdata["vad"],
+            turn_detection=MultilingualModel(),
+            preemptive_generation=True,
+        ),
     )
 
-    current_settings = [settings.copy()]
-    current_agent: list[ChatAgent | None] = [None]
+    def create_agent(s: dict) -> Agent:
+        """Create agent based on current settings."""
+        if s["agent_mode"] == "chat":
+            agent = ChatAgent(
+                stt_provider=s["stt_provider"],
+                llm_model=s["llm_model"],
+                tts_enabled=s["tts_enabled"],
+                task_agent_provider=s["task_agent_provider"],
+            )
+            agent.set_room(ctx.room)
+            state.agent = agent
+            return agent
+        else:
+            state.agent = None
+            return TranscribeAgent(stt_provider=s["stt_provider"])
+
+    # Register text input handler (works without voice session)
+    def on_text_input(reader: rtc.TextStreamReader, participant_id: str):
+        """Handle text messages from client."""
+        async def _handle():
+            try:
+                text = await reader.read_all()
+                if not text.strip():
+                    return
+                await process_text_input(
+                    room=ctx.room,
+                    text=text,
+                    llm_model=state.settings["llm_model"],
+                    tts_enabled=state.settings["tts_enabled"],
+                )
+            except Exception as e:
+                logger.error(f"Text input processing failed: {e}")
+
+        asyncio.create_task(_handle())
+
+    ctx.room.register_text_stream_handler(TOPIC_TEXT_INPUT, on_text_input)
+    logger.info("Text input handler registered")
 
     def on_stt_metrics(m: metrics.STTMetrics):
         """Log STT metrics including provider and audio duration."""
-        provider = current_settings[0]["stt_provider"]
         logger.info(
-            f"STT call: provider={provider} audio_duration={m.audio_duration:.2f}s "
+            f"STT call: provider={state.settings['stt_provider']} "
+            f"audio_duration={m.audio_duration:.2f}s "
             f"latency={m.duration:.2f}s streamed={m.streamed}"
         )
 
+    def on_user_state_changed(ev: UserStateChangedEvent):
+        """Reset inactivity timer when user completes a turn."""
+        logger.debug(f"User state changed: {ev.old_state} -> {ev.new_state}")
+        if not state.agent or not isinstance(state.agent, ChatAgent):
+            return
+
+        # Reset timer when user finishes speaking (turn completed)
+        if ev.old_state == "speaking" and ev.new_state != "speaking":
+            state.agent.on_turn_completed()
+
     async def _start_session():
         """Start agent session when user enables mic."""
-        nonlocal session
-        agent = create_agent(current_settings[0])
-        await session.start(
+        agent = create_agent(state.settings)
+        await state.session.start(
             agent=agent,
             room=ctx.room,
             room_options=room_io.RoomOptions(
                 text_output=True,
-                audio_output=(current_settings[0]["agent_mode"] == "chat"),
+                audio_output=(state.settings["agent_mode"] == "chat"),
             ),
         )
-        session.on("user_state_changed", on_user_state_changed)
-        if session.stt:
-            session.stt.on("metrics_collected", on_stt_metrics)
+        state.session.on("user_state_changed", on_user_state_changed)
+        if state.session.stt:
+            state.session.stt.on("metrics_collected", on_stt_metrics)
 
         # Start session timer and notify frontend
         if agent and isinstance(agent, ChatAgent):
@@ -423,19 +550,53 @@ async def entrypoint(ctx: JobContext):
 
     async def _stop_session():
         """Stop agent session when user disables mic."""
-        nonlocal session
-        agent = current_agent[0]
-        if agent and isinstance(agent, ChatAgent):
-            agent.stop_session_timer()
+        if state.agent and isinstance(state.agent, ChatAgent):
+            state.agent.stop_session_timer()
 
-        await session.aclose()
+        await state.session.aclose()
         # Recreate session for next connection
-        session = AgentSession(
+        state.session = AgentSession(
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
             preemptive_generation=True,
         )
-        current_agent[0] = None
+        state.agent = None
+
+    async def _apply_settings(new_settings: dict):
+        """Apply new settings, restarting session if needed."""
+        old = state.settings
+
+        mode_changed = new_settings["agent_mode"] != old["agent_mode"]
+        stt_changed = new_settings["stt_provider"] != old["stt_provider"]
+        llm_changed = new_settings["llm_model"] != old["llm_model"]
+        tts_changed = new_settings["tts_enabled"] != old["tts_enabled"]
+        task_provider_changed = new_settings["task_agent_provider"] != old["task_agent_provider"]
+
+        if not (mode_changed or stt_changed or llm_changed or tts_changed or task_provider_changed):
+            return
+
+        logger.info(f"Settings changed: {old} -> {new_settings}")
+        state.settings = new_settings.copy()
+
+        await state.session.aclose()
+        state.session = AgentSession(
+            vad=ctx.proc.userdata["vad"],
+            turn_detection=MultilingualModel(),
+            preemptive_generation=True,
+        )
+
+        agent = create_agent(new_settings)
+        await state.session.start(
+            agent=agent,
+            room=ctx.room,
+            room_options=room_io.RoomOptions(
+                text_output=True,
+                audio_output=(new_settings["agent_mode"] == "chat"),
+            ),
+        )
+        state.session.on("user_state_changed", on_user_state_changed)
+        if state.session.stt:
+            state.session.stt.on("metrics_collected", on_stt_metrics)
 
     @ctx.room.on("track_subscribed")
     def on_track_subscribed(
@@ -459,75 +620,12 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"Audio track unsubscribed from {participant.identity}")
             asyncio.create_task(_stop_session())
 
-    def on_user_state_changed(ev: UserStateChangedEvent):
-        """Reset inactivity timer when user completes a turn."""
-        logger.debug(f"User state changed: {ev.old_state} -> {ev.new_state}")
-        agent = current_agent[0]
-        if not agent or not isinstance(agent, ChatAgent):
-            return
-
-        # Reset timer when user finishes speaking (turn completed)
-        if ev.old_state == "speaking" and ev.new_state != "speaking":
-            agent.on_turn_completed()
-
-    def create_agent(s: dict) -> Agent:
-        """Create agent based on current settings."""
-        if s["agent_mode"] == "chat":
-            agent = ChatAgent(
-                stt_provider=s["stt_provider"],
-                llm_model=s["llm_model"],
-                tts_enabled=s["tts_enabled"],
-                task_agent_provider=s["task_agent_provider"],
-            )
-            agent.set_room(ctx.room)
-            current_agent[0] = agent
-            return agent
-        else:
-            current_agent[0] = None
-            return TranscribeAgent(stt_provider=s["stt_provider"])
-
-    async def _apply_settings(new_settings: dict):
-        nonlocal session
-        old = current_settings[0]
-
-        mode_changed = new_settings["agent_mode"] != old["agent_mode"]
-        stt_changed = new_settings["stt_provider"] != old["stt_provider"]
-        llm_changed = new_settings["llm_model"] != old["llm_model"]
-        tts_changed = new_settings["tts_enabled"] != old["tts_enabled"]
-        task_provider_changed = new_settings["task_agent_provider"] != old["task_agent_provider"]
-
-        if not (mode_changed or stt_changed or llm_changed or tts_changed or task_provider_changed):
-            return
-
-        logger.info(f"Settings changed: {old} -> {new_settings}")
-        current_settings[0] = new_settings.copy()
-
-        await session.aclose()
-        session = AgentSession(
-            vad=ctx.proc.userdata["vad"],
-            turn_detection=MultilingualModel(),
-            preemptive_generation=True,
-        )
-
-        agent = create_agent(new_settings)
-        await session.start(
-            agent=agent,
-            room=ctx.room,
-            room_options=room_io.RoomOptions(
-                text_output=True,
-                audio_output=(new_settings["agent_mode"] == "chat"),
-            ),
-        )
-        session.on("user_state_changed", on_user_state_changed)
-        if session.stt:
-            session.stt.on("metrics_collected", on_stt_metrics)
-
     @ctx.room.on("participant_metadata_changed")
     def on_metadata_changed(participant, prev_metadata):
         if participant.metadata:
             try:
                 meta = json.loads(participant.metadata)
-                new_settings = current_settings[0].copy()
+                new_settings = state.settings.copy()
                 changed = False
                 for key in new_settings:
                     if key in meta and meta[key] != new_settings[key]:

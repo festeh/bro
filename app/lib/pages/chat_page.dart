@@ -257,7 +257,11 @@ class ChatPageState extends State<ChatPage> {
     _textController.clear();
     _textFocusNode.requestFocus();
 
-    // TODO: Send to agent via LiveKit or other mechanism
+    // Show thinking indicator
+    setState(() => _pendingAssistantMessage = '');
+
+    // Send to agent via LiveKit text stream
+    widget.liveKitService.sendTextMessage(text);
     _log.info('Text message submitted: $text');
   }
 
