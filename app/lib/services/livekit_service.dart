@@ -81,8 +81,11 @@ class SessionNotificationEvent {
 }
 
 class LiveKitService {
-  static const String _wsUrl = 'ws://localhost:7880';
-  static const String _identity = 'desktop-user';
+  static const String _defaultWsUrl = 'ws://localhost:7880';
+  static const String _defaultIdentity = 'desktop-user';
+
+  final String _wsUrl;
+  final String _identity;
   late final String _roomName;
 
   final TokenService _tokenService;
@@ -128,11 +131,16 @@ class LiveKitService {
   bool get ttsEnabled => _ttsEnabled;
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
 
-  LiveKitService({TokenService? tokenService})
-    : _tokenService = tokenService ?? TokenService(),
-      _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
+  LiveKitService({
+    TokenService? tokenService,
+    String? wsUrl,
+    String? identity,
+  })  : _tokenService = tokenService ?? TokenService(),
+        _wsUrl = wsUrl ?? _defaultWsUrl,
+        _identity = identity ?? _defaultIdentity,
+        _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
     _llmModel = ModelsConfig.instance.defaultLlm;
-    _log.info('Created session with room: $_roomName');
+    _log.info('Created session with room: $_roomName, url: $_wsUrl, identity: $_identity');
   }
 
   Future<void> connect() async {

@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- WearOS flavor -->
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <application>
+        <!-- Standalone WearOS app (no phone companion required) -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+    </application>
+</manifest>
