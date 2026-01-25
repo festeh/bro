@@ -29,18 +29,13 @@ class ChatPageState extends State<ChatPage> {
   final _textController = TextEditingController();
   final _textFocusNode = FocusNode();
 
-  List<ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   bool _isSessionActive = false;
   bool _isSessionLoading = false;
 
-  // Live user message state
-  String _liveUserText = '';
-  DateTime? _liveUserTimestamp;
-  bool _isUserTurnActive = false;
-
-  // Agent response state
-  String? _pendingAssistantMessage;
+  // Track accumulated final segments for current user turn
+  String _accumulatedFinals = '';
 
   StreamSubscription<ConnectionStatus>? _connectionSub;
   StreamSubscription<TranscriptionEvent>? _transcriptionSub;
@@ -73,54 +68,91 @@ class ChatPageState extends State<ChatPage> {
         : ConnectionStatus.disconnected;
   }
 
+  // Find the current streaming message for a given role, or null
+  ChatMessage? _findStreamingMessage({required bool isUser}) {
+    for (final msg in _messages.reversed) {
+      if (msg.isUser == isUser && msg.isStreaming) {
+        return msg;
+      }
+    }
+    return null;
+  }
+
+  // Complete all streaming messages
+  void _completeAllStreaming() {
+    for (final msg in _messages) {
+      if (msg.isStreaming) {
+        msg.status = MessageStatus.complete;
+      }
+    }
+  }
+
+  // Add a new message or update existing streaming message
+  void _addOrUpdateMessage(String text, {required bool isUser, bool streaming = false}) {
+    final existing = _findStreamingMessage(isUser: isUser);
+
+    if (existing != null && streaming) {
+      // Update existing streaming message
+      existing.text = text;
+    } else {
+      // Complete any existing streaming messages first
+      _completeAllStreaming();
+
+      // Add new message
+      _messages.add(ChatMessage(
+        id: _uuid.v4(),
+        text: text,
+        isUser: isUser,
+        timestamp: DateTime.now(),
+        status: streaming ? MessageStatus.streaming : MessageStatus.complete,
+      ));
+    }
+  }
+
   void _onTranscription(TranscriptionEvent event) {
     if (!mounted) return;
 
-    final isAgentResponse = event.participantId.contains('agent');
+    final isAgent = event.participantId.contains('agent');
 
-    // Agent transcription is handled via immediate text stream (lk.llm_stream)
-    // This stream (lk.transcription) is synced with TTS - could use for word highlighting
-    if (isAgentResponse) {
-      return;
-    }
+    // Agent transcription handled via immediate text stream
+    if (isAgent) return;
 
-    // User speech - finalize any pending agent message first
-    if (_pendingAssistantMessage != null &&
-        _pendingAssistantMessage!.isNotEmpty) {
-      _addMessage(_pendingAssistantMessage!, isUser: false);
-      setState(() {
-        _pendingAssistantMessage = null;
-      });
-    }
-
-    // Update live text
+    // User speech
     setState(() {
-      if (!_isUserTurnActive) {
-        // First speech in this turn
-        _isUserTurnActive = true;
-        _liveUserTimestamp = DateTime.now();
+      final existingUser = _findStreamingMessage(isUser: true);
+
+      if (existingUser == null) {
+        // First speech in this turn - complete any streaming assistant message
+        _completeAllStreaming();
         _accumulatedFinals = '';
       }
 
       if (event.isFinal) {
-        // Final segment - append to accumulated finals
+        // Accumulate final segment
         if (_accumulatedFinals.isEmpty) {
           _accumulatedFinals = event.text;
         } else {
           _accumulatedFinals = '$_accumulatedFinals ${event.text}';
         }
-        _liveUserText = _accumulatedFinals;
 
-        // User turn is complete - finalize
-        _finalizeUserMessage();
-        _pendingAssistantMessage = ''; // Empty = show "..." thinking indicator
-      } else {
-        // Interim - show accumulated finals + current interim
-        if (_accumulatedFinals.isEmpty) {
-          _liveUserText = event.text;
+        // Update or add user message as complete
+        final userMsg = _findStreamingMessage(isUser: true);
+        if (userMsg != null) {
+          userMsg.text = _accumulatedFinals;
+          userMsg.status = MessageStatus.complete;
         } else {
-          _liveUserText = '$_accumulatedFinals ${event.text}';
+          _addOrUpdateMessage(_accumulatedFinals, isUser: true, streaming: false);
         }
+
+        // Start assistant streaming placeholder
+        _addOrUpdateMessage('', isUser: false, streaming: true);
+        _accumulatedFinals = '';
+      } else {
+        // Interim - show accumulated + current
+        final displayText = _accumulatedFinals.isEmpty
+            ? event.text
+            : '$_accumulatedFinals ${event.text}';
+        _addOrUpdateMessage(displayText, isUser: true, streaming: true);
       }
     });
 
@@ -152,52 +184,22 @@ class ChatPageState extends State<ChatPage> {
     if (!mounted) return;
 
     // Only handle agent responses
-    if (!event.participantId.contains('agent')) {
-      return;
-    }
+    if (!event.participantId.contains('agent')) return;
 
-    // Agent is responding - first finalize user message if pending
-    if (_isUserTurnActive && _liveUserText.isNotEmpty) {
-      _finalizeUserMessage();
-    }
-
-    // Accumulate immediate text chunks
     setState(() {
-      if (_pendingAssistantMessage == null || _pendingAssistantMessage!.isEmpty) {
-        _pendingAssistantMessage = event.text;
-      } else {
-        _pendingAssistantMessage = '$_pendingAssistantMessage${event.text}';
+      // Complete any streaming user message first
+      final userMsg = _findStreamingMessage(isUser: true);
+      if (userMsg != null) {
+        userMsg.status = MessageStatus.complete;
       }
-    });
 
-    _scrollToBottom();
-  }
-
-  String _accumulatedFinals = '';
-
-  void _finalizeUserMessage() {
-    if (_liveUserText.isEmpty) return;
-
-    _addMessage(_liveUserText, isUser: true, timestamp: _liveUserTimestamp);
-    setState(() {
-      _liveUserText = '';
-      _accumulatedFinals = '';
-      _liveUserTimestamp = null;
-      _isUserTurnActive = false;
-    });
-  }
-
-  void _addMessage(String text, {required bool isUser, DateTime? timestamp}) {
-    final message = ChatMessage(
-      id: _uuid.v4(),
-      text: text,
-      isUser: isUser,
-      timestamp: timestamp ?? DateTime.now(),
-    );
-
-    setState(() {
-      _messages = [..._messages, message]
-        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      // Find or create assistant streaming message
+      final assistantMsg = _findStreamingMessage(isUser: false);
+      if (assistantMsg != null) {
+        assistantMsg.text = '${assistantMsg.text}${event.text}';
+      } else {
+        _addOrUpdateMessage(event.text, isUser: false, streaming: true);
+      }
     });
 
     _scrollToBottom();
@@ -217,18 +219,15 @@ class ChatPageState extends State<ChatPage> {
 
   Future<void> _toggleSession() async {
     if (_isSessionActive || _isSessionLoading) {
-      // Stop session
       await widget.liveKitService.stopVoiceSession();
       setState(() {
         _isSessionActive = false;
         _isSessionLoading = false;
       });
     } else {
-      // Start session - show loading, wait for session_ready notification
       setState(() => _isSessionLoading = true);
       try {
         await widget.liveKitService.startVoiceSession();
-        // Don't set _isSessionActive yet - wait for session_ready notification
       } catch (e, st) {
         _log.severe('Failed to start voice session', e, st);
         setState(() => _isSessionLoading = false);
@@ -240,12 +239,8 @@ class ChatPageState extends State<ChatPage> {
 
   void clearChat() {
     setState(() {
-      _messages = [];
-      _liveUserText = '';
-      _liveUserTimestamp = null;
-      _isUserTurnActive = false;
+      _messages.clear();
       _accumulatedFinals = '';
-      _pendingAssistantMessage = null;
     });
   }
 
@@ -253,16 +248,24 @@ class ChatPageState extends State<ChatPage> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    _addMessage(text, isUser: true);
+    setState(() {
+      // Complete all streaming messages before adding new user message
+      _completeAllStreaming();
+
+      // Add user message
+      _addOrUpdateMessage(text, isUser: true, streaming: false);
+
+      // Add assistant streaming placeholder
+      _addOrUpdateMessage('', isUser: false, streaming: true);
+    });
+
     _textController.clear();
     _textFocusNode.requestFocus();
 
-    // Show thinking indicator
-    setState(() => _pendingAssistantMessage = '');
-
-    // Send to agent via LiveKit text stream
+    // Send to agent
     widget.liveKitService.sendTextMessage(text);
     _log.info('Text message submitted: $text');
+    _scrollToBottom();
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -289,115 +292,33 @@ class ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate item count: messages + live user bubble + pending assistant
-    final hasLiveUserBubble = _isUserTurnActive && _liveUserText.isNotEmpty;
-    final hasPendingAssistant = _pendingAssistantMessage != null;
-    final itemCount = _messages.length +
-        (hasLiveUserBubble ? 1 : 0) +
-        (hasPendingAssistant ? 1 : 0);
-
     return Column(
       children: [
-        // Messages list
         Expanded(
-          child: itemCount == 0
+          child: _messages.isEmpty
               ? _EmptyState()
               : ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(AppTokens.spacingMd),
-                  itemCount: itemCount,
+                  itemCount: _messages.length,
                   itemBuilder: (context, index) {
-                    // Regular messages
-                    if (index < _messages.length) {
-                      return _MessageBubble(message: _messages[index]);
-                    }
-
-                    // Live user bubble (after messages, before pending assistant)
-                    final liveUserIndex = _messages.length;
-                    if (hasLiveUserBubble && index == liveUserIndex) {
-                      return _LiveUserBubble(text: _liveUserText);
-                    }
-
-                    // Pending assistant message (last)
-                    return _PendingMessageBubble(
-                      text: _pendingAssistantMessage!,
+                    final message = _messages[index];
+                    return _MessageBubble(
+                      key: ValueKey(message.id),
+                      message: message,
                     );
                   },
                 ),
         ),
-
-        // Bottom bar with mic, text input, and send button
-        Container(
-          padding: const EdgeInsets.all(AppTokens.spacingMd),
-          color: AppTokens.backgroundSecondary,
-          child: Row(
-            children: [
-              // Mic button (left)
-              IconButton(
-                icon: Icon(
-                  _isSessionActive ? Icons.stop : Icons.mic,
-                  size: 24,
-                ),
-                style: IconButton.styleFrom(
-                  backgroundColor: _isSessionActive
-                      ? AppTokens.accentRecording
-                      : AppTokens.accentPrimary,
-                  foregroundColor: AppTokens.textPrimary,
-                  fixedSize: const Size(40, 40),
-                ),
-                onPressed: _connectionStatus == ConnectionStatus.connected
-                    ? _toggleSession
-                    : null,
-                tooltip: _isSessionActive ? 'Stop' : 'Voice input',
-              ),
-              const SizedBox(width: AppTokens.spacingSm),
-              // Text input field
-              Expanded(
-                child: Focus(
-                  focusNode: _textFocusNode,
-                  onKeyEvent: _handleKeyEvent,
-                  child: TextField(
-                    controller: _textController,
-                    style: TextStyle(
-                      color: AppTokens.textPrimary,
-                      fontSize: AppTokens.fontSizeMd,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      hintStyle: TextStyle(
-                        color: AppTokens.textTertiary,
-                        fontSize: AppTokens.fontSizeMd,
-                      ),
-                      filled: true,
-                      fillColor: AppTokens.backgroundTertiary,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppTokens.spacingMd,
-                        vertical: AppTokens.spacingSm,
-                      ),
-                    ),
-                    maxLines: null,
-                    textInputAction: TextInputAction.newline,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppTokens.spacingSm),
-              // Send button (right)
-              IconButton(
-                icon: const Icon(Icons.send, size: 24),
-                style: IconButton.styleFrom(
-                  backgroundColor: AppTokens.accentPrimary,
-                  foregroundColor: AppTokens.textPrimary,
-                  fixedSize: const Size(40, 40),
-                ),
-                onPressed: _submitTextMessage,
-                tooltip: 'Send (Ctrl+Enter)',
-              ),
-            ],
-          ),
+        _BottomBar(
+          textController: _textController,
+          textFocusNode: _textFocusNode,
+          isSessionActive: _isSessionActive,
+          isSessionLoading: _isSessionLoading,
+          isConnected: _connectionStatus == ConnectionStatus.connected,
+          onToggleSession: _toggleSession,
+          onSubmit: _submitTextMessage,
+          onKeyEvent: _handleKeyEvent,
         ),
       ],
     );
@@ -441,12 +362,20 @@ class _EmptyState extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
 
-  const _MessageBubble({required this.message});
+  const _MessageBubble({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
+    final isUser = message.isUser;
+    final isStreaming = message.isStreaming;
+    final displayText = isStreaming && message.text.isEmpty
+        ? '...'
+        : isStreaming && isUser
+            ? '${message.text}...'
+            : message.text;
+
     return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: AppTokens.spacingSm),
         padding: const EdgeInsets.symmetric(
@@ -457,13 +386,17 @@ class _MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         decoration: BoxDecoration(
-          color: message.isUser
-              ? AppTokens.accentPrimary
-              : AppTokens.backgroundTertiary,
+          color: isUser
+              ? isStreaming
+                  ? AppTokens.accentPrimary.withValues(alpha: 0.7)
+                  : AppTokens.accentPrimary
+              : isStreaming
+                  ? AppTokens.backgroundTertiary.withValues(alpha: 0.7)
+                  : AppTokens.backgroundTertiary,
           borderRadius: BorderRadius.circular(AppTokens.radiusMd),
         ),
         child: Text(
-          message.text,
+          displayText,
           style: TextStyle(
             color: AppTokens.textPrimary,
             fontSize: AppTokens.fontSizeMd,
@@ -474,70 +407,94 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _LiveUserBubble extends StatelessWidget {
-  final String text;
+class _BottomBar extends StatelessWidget {
+  final TextEditingController textController;
+  final FocusNode textFocusNode;
+  final bool isSessionActive;
+  final bool isSessionLoading;
+  final bool isConnected;
+  final VoidCallback onToggleSession;
+  final VoidCallback onSubmit;
+  final KeyEventResult Function(FocusNode, KeyEvent) onKeyEvent;
 
-  const _LiveUserBubble({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppTokens.spacingSm),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.spacingMd,
-          vertical: AppTokens.spacingSm,
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
-        decoration: BoxDecoration(
-          color: AppTokens.accentPrimary.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-        ),
-        child: Text(
-          '$text...',
-          style: TextStyle(
-            color: AppTokens.textPrimary,
-            fontSize: AppTokens.fontSizeMd,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PendingMessageBubble extends StatelessWidget {
-  final String text;
-
-  const _PendingMessageBubble({required this.text});
+  const _BottomBar({
+    required this.textController,
+    required this.textFocusNode,
+    required this.isSessionActive,
+    required this.isSessionLoading,
+    required this.isConnected,
+    required this.onToggleSession,
+    required this.onSubmit,
+    required this.onKeyEvent,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppTokens.spacingSm),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.spacingMd,
-          vertical: AppTokens.spacingSm,
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
-        decoration: BoxDecoration(
-          color: AppTokens.backgroundTertiary.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-        ),
-        child: Text(
-          text.isEmpty ? '...' : text,
-          style: TextStyle(
-            color: AppTokens.textSecondary,
-            fontSize: AppTokens.fontSizeMd,
-            fontStyle: FontStyle.italic,
+    return Container(
+      padding: const EdgeInsets.all(AppTokens.spacingMd),
+      color: AppTokens.backgroundSecondary,
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              isSessionActive ? Icons.stop : Icons.mic,
+              size: 24,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: isSessionActive
+                  ? AppTokens.accentRecording
+                  : AppTokens.accentPrimary,
+              foregroundColor: AppTokens.textPrimary,
+              fixedSize: const Size(40, 40),
+            ),
+            onPressed: isConnected ? onToggleSession : null,
+            tooltip: isSessionActive ? 'Stop' : 'Voice input',
           ),
-        ),
+          const SizedBox(width: AppTokens.spacingSm),
+          Expanded(
+            child: Focus(
+              focusNode: textFocusNode,
+              onKeyEvent: onKeyEvent,
+              child: TextField(
+                controller: textController,
+                style: TextStyle(
+                  color: AppTokens.textPrimary,
+                  fontSize: AppTokens.fontSizeMd,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Type a message...',
+                  hintStyle: TextStyle(
+                    color: AppTokens.textTertiary,
+                    fontSize: AppTokens.fontSizeMd,
+                  ),
+                  filled: true,
+                  fillColor: AppTokens.backgroundTertiary,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppTokens.spacingMd,
+                    vertical: AppTokens.spacingSm,
+                  ),
+                ),
+                maxLines: null,
+                textInputAction: TextInputAction.newline,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppTokens.spacingSm),
+          IconButton(
+            icon: const Icon(Icons.send, size: 24),
+            style: IconButton.styleFrom(
+              backgroundColor: AppTokens.accentPrimary,
+              foregroundColor: AppTokens.textPrimary,
+              fixedSize: const Size(40, 40),
+            ),
+            onPressed: onSubmit,
+            tooltip: 'Send (Ctrl+Enter)',
+          ),
+        ],
       ),
     );
   }
