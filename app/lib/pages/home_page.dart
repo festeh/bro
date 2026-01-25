@@ -10,6 +10,7 @@ import '../models/models_config.dart';
 import '../models/recording.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
+import '../services/settings_service.dart';
 import '../services/storage_service.dart';
 import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
@@ -26,6 +27,7 @@ class HomePage extends StatefulWidget {
   final LiveKitService liveKitService;
   final EgressService egressService;
   final StorageService storageService;
+  final SettingsService settingsService;
   final String recordingsDir;
 
   const HomePage({
@@ -33,6 +35,7 @@ class HomePage extends StatefulWidget {
     required this.liveKitService,
     required this.egressService,
     required this.storageService,
+    required this.settingsService,
     required this.recordingsDir,
   });
 
@@ -73,7 +76,14 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _llmModel = ModelsConfig.instance.defaultLlm;
+    // Load persisted settings
+    _sttProvider = widget.settingsService.sttProvider;
+    _llmModel = widget.settingsService.llmModel;
+    _ttsEnabled = widget.settingsService.ttsEnabled;
+    // Apply to LiveKitService (will be sent on connect)
+    widget.liveKitService.setSttProvider(_sttProvider);
+    widget.liveKitService.setLlmModel(_llmModel);
+    widget.liveKitService.setTtsEnabled(_ttsEnabled);
     _player = Player();
     _init();
   }
@@ -317,16 +327,19 @@ class _HomePageState extends State<HomePage> {
   void _onSttProviderChanged(SttProvider provider) {
     setState(() => _sttProvider = provider);
     widget.liveKitService.setSttProvider(provider);
+    widget.settingsService.setSttProvider(provider);
   }
 
   void _onLlmModelChanged(Model model) {
     setState(() => _llmModel = model);
     widget.liveKitService.setLlmModel(model);
+    widget.settingsService.setLlmModel(model);
   }
 
   void _onTtsEnabledChanged(bool enabled) {
     setState(() => _ttsEnabled = enabled);
     widget.liveKitService.setTtsEnabled(enabled);
+    widget.settingsService.setTtsEnabled(enabled);
   }
 
   void _onModeChanged(AppMode mode) {

@@ -11,6 +11,7 @@ import 'models/models_config.dart';
 import 'pages/home_page.dart';
 import 'services/egress_service.dart';
 import 'services/livekit_service.dart';
+import 'services/settings_service.dart';
 import 'services/storage_service.dart';
 import 'services/token_service.dart';
 import 'theme/theme.dart';
@@ -48,14 +49,17 @@ void main() async {
   final liveKitService = LiveKitService(tokenService: tokenService);
   final egressService = EgressService(tokenService: tokenService);
   final storageService = StorageService(recordingsDir: recordingsDir);
+  final settingsService = SettingsService();
 
   await storageService.init();
+  await settingsService.init();
 
   runApp(
     BroApp(
       liveKitService: liveKitService,
       egressService: egressService,
       storageService: storageService,
+      settingsService: settingsService,
     ),
   );
 }
@@ -83,12 +87,14 @@ class BroApp extends StatefulWidget {
   final LiveKitService liveKitService;
   final EgressService egressService;
   final StorageService storageService;
+  final SettingsService settingsService;
 
   const BroApp({
     super.key,
     required this.liveKitService,
     required this.egressService,
     required this.storageService,
+    required this.settingsService,
   });
 
   @override
@@ -113,6 +119,7 @@ class _BroAppState extends State<BroApp> {
         liveKitService: widget.liveKitService,
         egressService: widget.egressService,
         storageService: widget.storageService,
+        settingsService: widget.settingsService,
         recordingsDir: widget.storageService.recordingsDir,
       ),
     );

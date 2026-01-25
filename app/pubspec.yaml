@@ -42,6 +42,7 @@ dependencies:
   sqflite_common_ffi: ^2.4.0  # For Linux desktop
   path_provider: ^2.1.0
   path: ^1.9.0
+  shared_preferences: ^2.3.0
 
   # Utilities
   uuid: ^4.5.0
