@@ -287,14 +287,18 @@ class TestTaskAgentHandleAction:
 
     @pytest.mark.asyncio
     async def test_handle_action_confirm_with_pending(self):
-        """Test handling CONFIRM action with pending command."""
+        """Test handling CONFIRM action with pending command and retry."""
         agent = TaskAgent(session_id="test")
         agent._state.pending_command = ["task", "add", "Test"]
 
         output = TaskAgentOutput(response="Done!", action=Action.CONFIRM)
 
-        with patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run:
+        with (
+            patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run,
+            patch.object(agent._cli, "get_help", new_callable=AsyncMock) as mock_help,
+        ):
             mock_run.return_value = {"id": 1}
+            mock_help.return_value = "CLI help text"
             result = await agent._handle_action(output)
 
         assert result.text == "Done!"
@@ -325,7 +329,7 @@ class TestTaskAgentHandleAction:
 
     @pytest.mark.asyncio
     async def test_handle_action_query(self):
-        """Test handling QUERY action."""
+        """Test handling QUERY action with retry."""
         agent = TaskAgent(session_id="test")
         output = TaskAgentOutput(
             response="You have 3 tasks due today.",
@@ -333,8 +337,14 @@ class TestTaskAgentHandleAction:
             cli_args=["task", "list", "--due", "today"],
         )
 
-        with patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run:
+        with (
+            patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run,
+            patch.object(agent._cli, "get_help", new_callable=AsyncMock) as mock_help,
+            patch.object(agent, "_summarize_query_results", new_callable=AsyncMock) as mock_summary,
+        ):
             mock_run.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
+            mock_help.return_value = "CLI help text"
+            mock_summary.return_value = "You have 3 tasks due today."
             result = await agent._handle_action(output)
 
         assert result.text == "You have 3 tasks due today."
@@ -350,8 +360,12 @@ class TestTaskAgentHandleAction:
             cli_args=["task", "list"],
         )
 
-        with patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run:
+        with (
+            patch.object(agent._cli, "run", new_callable=AsyncMock) as mock_run,
+            patch.object(agent._cli, "get_help", new_callable=AsyncMock) as mock_help,
+        ):
             mock_run.return_value = []
+            mock_help.return_value = "CLI help text"
             result = await agent._handle_action(output)
 
         assert "No tasks found" in result.text

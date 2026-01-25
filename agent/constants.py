@@ -11,3 +11,4 @@ ATTR_TRANSCRIPTION_FINAL = "lk.transcription_final"
 # Task agent configuration
 DIMAIST_CLI_PATH = "dimaist-cli"  # Default path, can be overridden via env
 TASK_AGENT_TIMEOUT = 30.0  # CLI command timeout in seconds
+MAX_CLI_RETRIES = 3  # LLM-assisted retry attempts on CLI failure

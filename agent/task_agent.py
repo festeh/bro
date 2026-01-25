@@ -8,13 +8,33 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import TypeVar
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from agent.constants import MAX_CLI_RETRIES
 from agent.dimaist_cli import DimaistCLI
 from ai.models_config import get_provider
+
+# Result type for flat error handling (mirrors voice_agent.py)
+T = TypeVar("T")
+
+
+@dataclass
+class Ok[T]:
+    """Success result."""
+    value: T
+
+
+@dataclass
+class Err:
+    """Error result."""
+    error: str
+
+
+Result = Ok[T] | Err
 
 logger = logging.getLogger("task-agent")
 
@@ -270,7 +290,7 @@ class TaskAgent:
             model=self._model,  # type: ignore[call-arg]
         )
 
-    async def _summarize_query_results(self, result: dict | list) -> str:
+    async def _summarize_query_results(self, result: dict | list, max_tasks: int = 20) -> str:
         """Summarize query results using LLM for natural language response."""
         import json
 
@@ -278,9 +298,13 @@ class TaskAgent:
         if isinstance(result, list):
             if not result:
                 return "No tasks found."
-            result_text = json.dumps(result, indent=2, default=str)
+            total = len(result)
+            limited = result[:max_tasks]
+            result_text = json.dumps(limited, default=str)
+            if total > max_tasks:
+                result_text += f"\n(showing {max_tasks} of {total} tasks)"
         else:
-            result_text = json.dumps(result, indent=2, default=str)
+            result_text = json.dumps(result, default=str)
 
         prompt = f"""Summarize these task query results in a brief, conversational response suitable for voice.
 Be concise - just the key information. Don't repeat the full data, summarize it.
@@ -324,6 +348,71 @@ Guidelines:
 - Keep responses concise for voice
 """
 
+    async def _try_cli(self, cli_args: list[str]) -> Result[dict | list]:
+        """Single CLI attempt. Returns Ok(result) or Err(message)."""
+        try:
+            result = await self._cli.run(*cli_args)
+            return Ok(result)
+        except Exception as e:
+            logger.warning(f"CLI failed: {e}")
+            return Err(str(e))
+
+    async def _fix_cli_args(
+        self,
+        cli_args: list[str],
+        error: str,
+        cli_help: str,
+    ) -> list[str] | None:
+        """Ask LLM to fix CLI args based on error. Returns corrected args or None."""
+
+        class FixOutput(BaseModel):
+            can_fix: bool = Field(description="Whether the error is fixable by adjusting the command")
+            cli_args: list[str] | None = Field(description="Corrected CLI args, or None if unfixable")
+
+        prompt = f"""The CLI command failed. Fix it if possible.
+
+Command: {' '.join(cli_args)}
+Error: {error}
+
+Available CLI commands:
+{cli_help}
+
+If the error is fixable by adjusting the command, provide corrected cli_args.
+If unfixable (e.g., task doesn't exist, permission error), set can_fix=false.
+"""
+        try:
+            llm = self._get_llm()
+            structured_llm = llm.with_structured_output(FixOutput, method="function_calling")
+            result = await structured_llm.ainvoke([HumanMessage(content=prompt)])
+            if isinstance(result, FixOutput) and result.can_fix and result.cli_args:
+                logger.info(f"LLM suggested fix: {result.cli_args}")
+                return result.cli_args
+        except Exception as e:
+            logger.warning(f"LLM fix failed: {e}")
+
+        return None
+
+    async def _run_cli_with_retry(self, cli_args: list[str]) -> Result[dict | list]:
+        """Run CLI command with LLM-assisted retry on failure."""
+        cli_help = await self._cli.get_help()
+
+        for attempt in range(MAX_CLI_RETRIES):
+            result = await self._try_cli(cli_args)
+
+            match result:
+                case Ok(_):
+                    return result
+                case Err(error) if attempt == MAX_CLI_RETRIES - 1:
+                    return Err(error)
+                case Err(error):
+                    logger.info(f"Retry {attempt + 1}/{MAX_CLI_RETRIES}: fixing CLI args")
+                    fixed = await self._fix_cli_args(cli_args, error, cli_help)
+                    if not fixed:
+                        return Err(error)
+                    cli_args = fixed
+
+        return Err("Max retries exceeded")
+
     async def _handle_action(self, output: TaskAgentOutput) -> AgentResponse:
         """Handle the LLM's action decision."""
         self._last_cli_command = None  # Reset for this action
@@ -345,19 +434,20 @@ Guidelines:
                 return AgentResponse(text=output.response)
 
             case Action.CONFIRM:
-                # User confirmed - execute pending command
-                if self._state.pending_command:
-                    try:
-                        self._last_cli_command = self._state.pending_command
-                        result = await self._cli.run(*self._state.pending_command)
-                        self._state.pending_command = None
-                        logger.info(f"Command executed successfully: {result}")
+                # User confirmed - execute pending command with retry
+                if not self._state.pending_command:
+                    return AgentResponse(text="Nothing to confirm. What would you like to do?")
+
+                self._last_cli_command = self._state.pending_command
+                result = await self._run_cli_with_retry(self._state.pending_command)
+                self._state.pending_command = None
+
+                match result:
+                    case Err(error):
+                        return AgentResponse(text=f"Command failed: {error}. What else?")
+                    case Ok(data):
+                        logger.info(f"Command executed successfully: {data}")
                         return AgentResponse(text=output.response)
-                    except Exception as e:
-                        logger.error(f"CLI command failed: {e}")
-                        self._state.pending_command = None
-                        return AgentResponse(text=f"Command failed: {e}. What else?")
-                return AgentResponse(text="Nothing to confirm. What would you like to do?")
 
             case Action.CANCEL:
                 # User declined - clear pending command
@@ -365,30 +455,31 @@ Guidelines:
                 return AgentResponse(text=output.response)
 
             case Action.QUERY:
-                # Execute read-only command immediately
-                if output.cli_args:
-                    try:
-                        import json
+                # Execute read-only command with retry
+                if not output.cli_args:
+                    return AgentResponse(text=output.response)
 
-                        self._last_cli_command = output.cli_args
-                        result = await self._cli.run(*output.cli_args)
-                        self._last_cli_result = result
-                        # Format result for voice
-                        if isinstance(result, list):
-                            if not result:
+                import json
+
+                self._last_cli_command = output.cli_args
+                result = await self._run_cli_with_retry(output.cli_args)
+
+                match result:
+                    case Err(error):
+                        return AgentResponse(text=f"Couldn't fetch tasks: {error}")
+                    case Ok(data):
+                        self._last_cli_result = data
+                        if isinstance(data, list):
+                            if not data:
                                 return AgentResponse(text="No tasks found.")
-                            logger.info(f"Query returned {len(result)} items")
-                        # Get LLM to summarize the results
-                        summary = await self._summarize_query_results(result)
-                        # Include CLI command and result in history for context
+                            logger.info(f"Query returned {len(data)} items")
+                        summary = await self._summarize_query_results(data)
                         cli_cmd = " ".join(output.cli_args)
-                        result_json = json.dumps(result, indent=2, default=str)
+                        # Limit history to avoid bloating conversation context
+                        limited = data[:20] if isinstance(data, list) else data
+                        result_json = json.dumps(limited, default=str)
                         history_context = f"[CLI: {cli_cmd}]\n[Result: {result_json}]"
                         return AgentResponse(text=summary, history_context=history_context)
-                    except Exception as e:
-                        logger.error(f"Query failed: {e}")
-                        return AgentResponse(text=f"Couldn't fetch tasks: {e}")
-                return AgentResponse(text=output.response)
 
             case Action.EXIT:
                 # End task management session
