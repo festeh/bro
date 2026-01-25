@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncIterable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Generic, TypeVar
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -41,6 +42,24 @@ from ai.models_config import get_default_llm, get_llm_by_model_id
 
 load_dotenv()
 
+# Result type for error handling (like Rust's Result<T, E>)
+T = TypeVar("T")
+
+
+@dataclass
+class Ok(Generic[T]):
+    """Success result."""
+    value: T
+
+
+@dataclass
+class Err:
+    """Error result."""
+    error: str
+
+
+Result = Ok[T] | Err
+
 # Session inactivity timeout
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
 SESSION_WARNING_THRESHOLD = 55.0  # seconds
@@ -55,45 +74,41 @@ class NotificationType(StrEnum):
 
 logger = logging.getLogger("voice-agent")
 
-# Legacy mapping for old Flutter enum names -> model_id (for backward compatibility)
-_LEGACY_MODEL_KEYS = {
-    "glm47": "zai-org/GLM-4.7-TEE",
-    "mimoV2": "XiaomiMiMo/MiMo-V2-Flash",
-    "minimax": "MiniMaxAI/MiniMax-M2.1-TEE",
-    "kimiK2": "moonshotai/Kimi-K2-Thinking-TEE",
-    "deepseekV31": "deepseek-ai/DeepSeek-V3.1-Terminus-TEE",
-}
 
-DEFAULT_LLM_MODEL = get_default_llm().model_id
-DEFAULT_STT_PROVIDER = "deepgram"
-DEFAULT_TTS_ENABLED = True
-DEFAULT_TASK_AGENT_PROVIDER = "groq"
+@dataclass
+class AgentSettings:
+    """Configuration for agent behavior."""
+
+    stt_provider: str = "deepgram"
+    llm_model: str = field(default_factory=lambda: get_default_llm().model_id)
+    tts_enabled: bool = True
+    task_agent_provider: str = "groq"
+    agent_mode: str = "chat"
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AgentSettings":
+        return cls(
+            stt_provider=d.get("stt_provider", "deepgram"),
+            llm_model=d.get("llm_model", get_default_llm().model_id),
+            tts_enabled=d.get("tts_enabled", True),
+            task_agent_provider=d.get("task_agent_provider", "groq"),
+            agent_mode=d.get("agent_mode", "chat"),
+        )
 
 
 def create_stt(provider: str):
     """Create STT instance based on provider name."""
     if provider == "elevenlabs":
         return elevenlabs.STT()
-    # Default to deepgram
     return deepgram.STT(model="nova-3")
 
 
-def create_llm(model_key: str):
-    """Create LLM instance based on model key or model_id."""
-    # Try legacy mapping first (for old Flutter enum names)
-    model_id = _LEGACY_MODEL_KEYS.get(model_key)
-
-    if model_id:
-        # Found in legacy mapping, look up full model config
-        model = get_llm_by_model_id(model_id)
-    else:
-        # Assume it's a model_id directly
-        model = get_llm_by_model_id(model_key)
-
+def create_llm(model_id: str) -> openai.LLM | None:
+    """Create LLM instance from model_id. Returns None if model not found."""
+    model = get_llm_by_model_id(model_id)
     if not model:
-        # Fallback to default
-        logger.warning(f"Unknown model key: {model_key}, using default")
-        model = get_default_llm()
+        logger.error(f"Unknown model: {model_id}. Check models.json configuration.")
+        return None
 
     return openai.LLM(
         model=model.model_id,
@@ -105,30 +120,22 @@ def create_llm(model_key: str):
 class ChatAgent(Agent):
     """Chat mode: STT → LLM → TTS with auto turn detection and immediate text streaming"""
 
-    def __init__(
-        self,
-        stt_provider: str = DEFAULT_STT_PROVIDER,
-        llm_model: str = DEFAULT_LLM_MODEL,
-        tts_enabled: bool = DEFAULT_TTS_ENABLED,
-        task_agent_provider: str = DEFAULT_TASK_AGENT_PROVIDER,
-    ):
+    def __init__(self, settings: AgentSettings):
         super().__init__(
             instructions="You are a helpful voice assistant. Keep responses concise and conversational.",
-            stt=create_stt(stt_provider),
-            llm=create_llm(llm_model),
-            tts=elevenlabs.TTS() if tts_enabled else None,
+            stt=create_stt(settings.stt_provider),
+            llm=create_llm(settings.llm_model),
+            tts=elevenlabs.TTS() if settings.tts_enabled else None,
         )
+        self._settings = settings
         self._room: rtc.Room | None = None
         self._immediate_writer: rtc.TextStreamWriter | None = None
         self._segment_id: str = ""
-        # Session inactivity timeout
         self._session_id: str = ""
         self._last_activity_time: float | None = None
         self._session_warning_sent: bool = False
         self._session_monitor_task: asyncio.Task | None = None
-        # Task agent for task management sub-flow
         self._task_agent: TaskAgent | None = None
-        self._task_agent_provider = task_agent_provider
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -246,81 +253,135 @@ class ChatAgent(Agent):
         except asyncio.CancelledError:
             pass
 
+    async def _process_input(self, text: str) -> Result[str | None]:
+        """Process user input. Returns Ok(response) or Ok(None) for default LLM, Err on failure."""
+
+        # Active task agent gets all messages
+        if self._task_agent and self._task_agent.is_active:
+            return await self._route_to_task_agent(text)
+
+        # Classify intent
+        try:
+            classification = await classify_intent([("user", text)])
+        except Exception as e:
+            logger.error(f"Intent classification failed: {e}", exc_info=True)
+            return Err(f"Configuration error: {e}")
+
+        logger.debug(f"Intent: {classification.intent} (confidence: {classification.confidence:.2f})")
+
+        # Route task management to task agent
+        if classification.intent == Intent.TASK_MANAGEMENT:
+            return await self._route_to_task_agent(text)
+
+        # Default LLM flow
+        return Ok(None)
+
+    async def _route_to_task_agent(self, text: str) -> Result[str]:
+        """Route message to task agent."""
+        if not self._task_agent:
+            self._task_agent = TaskAgent(
+                session_id=self._session_id,
+                provider=self._settings.task_agent_provider,
+            )
+            logger.info("Created TaskAgent")
+
+        try:
+            response = await self._task_agent.process_message(text)
+        except Exception as e:
+            logger.error(f"TaskAgent failed: {e}", exc_info=True)
+            return Err("Sorry, I couldn't process that task request.")
+
+        logger.info(f"TaskAgent response: {response.text[:100]}...")
+
+        if response.should_exit:
+            logger.info(f"TaskAgent exiting: {response.exit_reason}")
+            self._task_agent = None
+
+        return Ok(response.text)
+
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
-        """Handle user message - route to task agent if needed."""
+        """Handle voice input - route through shared processing."""
         user_text = new_message.text_content or ""
+        result = await self._process_input(user_text)
 
-        # If task agent is active, route all messages to it
-        if self._task_agent and self._task_agent.is_active:
-            response = await self._task_agent.process_message(user_text)
-            logger.info(f"Task agent response: {response.text[:100]}...")
+        match result:
+            case Err(error):
+                await self._speak_and_stop(error)
+            case Ok(None):
+                pass  # Let default LLM flow continue
+            case Ok(response):
+                await self._speak_and_stop(response)
 
-            if response.should_exit:
-                logger.info(f"Task agent exiting: {response.exit_reason}")
-                self._task_agent = None
+    async def _get_response(self, result: Result, user_input: str) -> AsyncIterable[str]:
+        """Get response chunks - pre-made or generated."""
+        match result:
+            case Err(error):
+                yield error
+            case Ok(None):
+                async for chunk in self._generate_llm(user_input):
+                    yield chunk
+            case Ok(response):
+                yield response
 
-            # Send response and stop default LLM flow
-            await self._speak_and_stop(response.text)
+    async def _generate_llm(self, user_input: str) -> AsyncIterable[str]:
+        """Generate response chunks from LLM."""
+        model = get_llm_by_model_id(self._settings.llm_model)
+        if not model:
+            logger.error(f"Unknown model: {self._settings.llm_model}")
+            yield f"Error: Unknown model '{self._settings.llm_model}'. Check configuration."
             return
 
-        # Classify intent using LLM
-        classification = await classify_intent([("user", user_text)])
-        logger.debug(
-            f"Intent classified: {classification.intent} "
-            f"(confidence: {classification.confidence:.2f})"
+        llm_client = ChatOpenAI(
+            base_url=model.base_url,
+            api_key=model.api_key,
+            model=model.model_id,
+            streaming=True,
         )
 
-        # Route task_management intent to task agent
-        if classification.intent == Intent.TASK_MANAGEMENT:
-            logger.info(f"Task intent detected: {user_text[:50]}...")
+        async for chunk in llm_client.astream([("user", user_input)]):
+            if chunk.content:
+                yield chunk.content
 
-            # Create task agent if needed
-            if not self._task_agent:
-                self._task_agent = TaskAgent(
-                    session_id=self._session_id,
-                    provider=self._task_agent_provider,
-                )
-
-            response = await self._task_agent.process_message(user_text)
-            logger.info(f"Task agent response: {response.text[:100]}...")
-
-            # Send response and stop default LLM flow
-            await self._speak_and_stop(response.text)
+    async def _send(self, chunks: AsyncIterable[str]) -> None:
+        """Stream response chunks to frontend."""
+        if not self._room:
+            logger.warning("Cannot send: no room")
             return
 
-        # Not a task message - let default LLM flow continue
-        # (don't raise StopResponse, let Agent handle normally)
+        self._segment_id = f"RESP_{uuid.uuid4().hex[:8]}"
+        writer = await self._room.local_participant.stream_text(
+            topic=TOPIC_LLM_STREAM,
+            attributes={
+                ATTR_SEGMENT_ID: self._segment_id,
+                ATTR_TRANSCRIPTION_FINAL: "false",
+            },
+        )
 
-    async def _speak_and_stop(self, text: str) -> None:
-        """Send text to frontend and stop default response flow."""
-        # Stream text immediately to frontend
-        if self._room:
-            self._segment_id = f"TASK_{uuid.uuid4().hex[:8]}"
-            writer = await self._room.local_participant.stream_text(
-                topic=TOPIC_LLM_STREAM,
-                attributes={
-                    ATTR_SEGMENT_ID: self._segment_id,
-                    ATTR_TRANSCRIPTION_FINAL: "true",
-                },
-            )
-            await writer.write(text)
+        try:
+            async for chunk in chunks:
+                await writer.write(chunk)
+        finally:
             await writer.aclose()
 
-        # TODO: Integrate TTS for task agent responses
-        # For now, text is sent to frontend for display
-
+    async def _speak_and_stop(self, text: str) -> None:
+        """Stream response and stop default voice flow."""
+        await self._send(self._once(text))
         raise StopResponse()
+
+    async def _once(self, text: str) -> AsyncIterable[str]:
+        """Yield a single value as async iterable."""
+        yield text
 
 
 class TranscribeAgent(Agent):
     """Transcribe mode: STT only, emit transcripts without LLM response"""
 
-    def __init__(self, stt_provider: str = DEFAULT_STT_PROVIDER):
+    def __init__(self, settings: AgentSettings):
         super().__init__(
             instructions="",
-            stt=create_stt(stt_provider),
+            stt=create_stt(settings.stt_provider),
         )
 
     async def on_user_turn_completed(
@@ -331,55 +392,36 @@ class TranscribeAgent(Agent):
         raise StopResponse()
 
 
-def get_settings_from_metadata(ctx: JobContext) -> dict:
+def get_settings_from_metadata(ctx: JobContext) -> AgentSettings:
     """Extract settings from participant or room metadata."""
-    settings = {
-        "agent_mode": "chat",
-        "stt_provider": DEFAULT_STT_PROVIDER,
-        "llm_model": DEFAULT_LLM_MODEL,
-        "tts_enabled": DEFAULT_TTS_ENABLED,
-        "task_agent_provider": DEFAULT_TASK_AGENT_PROVIDER,
-    }
+    merged: dict = {}
 
     for participant in ctx.room.remote_participants.values():
         if participant.metadata:
             try:
-                meta = json.loads(participant.metadata)
-                for key in settings:
-                    if key in meta:
-                        settings[key] = meta[key]
-                logger.info(f"Settings from participant {participant.identity}: {settings}")
+                merged.update(json.loads(participant.metadata))
+                logger.info(f"Settings from participant {participant.identity}: {merged}")
                 break
             except json.JSONDecodeError:
                 pass
 
     if ctx.room.metadata:
         try:
-            meta = json.loads(ctx.room.metadata)
-            for key in settings:
-                if key in meta:
-                    settings[key] = meta[key]
-            logger.info(f"Settings from room metadata: {settings}")
+            merged.update(json.loads(ctx.room.metadata))
+            logger.info(f"Settings from room metadata: {merged}")
         except json.JSONDecodeError:
             pass
 
-    return settings
+    return AgentSettings.from_dict(merged)
 
 
 @dataclass
 class SessionState:
     """Mutable state for an agent session."""
 
-    settings: dict = field(default_factory=dict)
+    settings: AgentSettings = field(default_factory=AgentSettings)
     agent: "ChatAgent | None" = None
     session: AgentSession | None = None
-
-    def update_settings(self, new_settings: dict) -> bool:
-        """Update settings and return True if changed."""
-        if new_settings == self.settings:
-            return False
-        self.settings = new_settings.copy()
-        return True
 
 
 server = AgentServer()
@@ -393,65 +435,6 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-async def process_text_input(
-    room: rtc.Room,
-    text: str,
-    llm_model: str,
-    tts_enabled: bool,
-) -> None:
-    """Process text input from client, respond via LLM and optionally TTS."""
-    segment_id = f"TEXT_{uuid.uuid4().hex[:8]}"
-    logger.info(f"Processing text input: {text[:50]}... (tts={tts_enabled})")
-
-    # Get model config and create langchain LLM
-    model = get_llm_by_model_id(llm_model)
-    if not model:
-        model = get_default_llm()
-    llm = ChatOpenAI(
-        base_url=model.base_url,
-        api_key=model.api_key,
-        model=model.model_id,
-        streaming=True,
-    )
-    messages = [("user", text)]
-
-    # Stream response to lk.llm_stream
-    full_response = ""
-    writer = await room.local_participant.stream_text(
-        topic=TOPIC_LLM_STREAM,
-        attributes={
-            ATTR_SEGMENT_ID: segment_id,
-            ATTR_TRANSCRIPTION_FINAL: "false",
-        },
-    )
-
-    try:
-        async for chunk in llm.astream(messages):
-            if chunk.content:
-                full_response += chunk.content
-                await writer.write(chunk.content)
-    finally:
-        await writer.aclose()
-
-    logger.info(f"Text response complete: {len(full_response)} chars")
-
-    # TTS if enabled
-    if tts_enabled and full_response:
-        try:
-            tts = elevenlabs.TTS()
-            audio_stream = tts.synthesize(full_response)
-            # Publish audio to room
-            source = rtc.AudioSource(sample_rate=24000, num_channels=1)
-            track = rtc.LocalAudioTrack.create_audio_track("tts_response", source)
-            await room.local_participant.publish_track(track)
-
-            async for frame in audio_stream:
-                await source.capture_frame(frame.frame)
-
-            await room.local_participant.unpublish_track(track.sid)
-            logger.info("TTS playback complete")
-        except Exception as e:
-            logger.warning(f"TTS failed: {e}")
 
 
 @server.rtc_session()
@@ -464,7 +447,7 @@ async def entrypoint(ctx: JobContext):
 
     # Session state - single object holds all mutable state
     state = SessionState(
-        settings=initial_settings.copy(),
+        settings=initial_settings,
         session=AgentSession(
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
@@ -472,21 +455,16 @@ async def entrypoint(ctx: JobContext):
         ),
     )
 
-    def create_agent(s: dict) -> Agent:
+    def create_agent(settings: AgentSettings) -> Agent:
         """Create agent based on current settings."""
-        if s["agent_mode"] == "chat":
-            agent = ChatAgent(
-                stt_provider=s["stt_provider"],
-                llm_model=s["llm_model"],
-                tts_enabled=s["tts_enabled"],
-                task_agent_provider=s["task_agent_provider"],
-            )
+        if settings.agent_mode == "chat":
+            agent = ChatAgent(settings)
             agent.set_room(ctx.room)
             state.agent = agent
             return agent
         else:
             state.agent = None
-            return TranscribeAgent(stt_provider=s["stt_provider"])
+            return TranscribeAgent(settings)
 
     # Register text input handler (works without voice session)
     def on_text_input(reader: rtc.TextStreamReader, participant_id: str):
@@ -496,14 +474,23 @@ async def entrypoint(ctx: JobContext):
                 text = await reader.read_all()
                 if not text.strip():
                     return
-                await process_text_input(
-                    room=ctx.room,
-                    text=text,
-                    llm_model=state.settings["llm_model"],
-                    tts_enabled=state.settings["tts_enabled"],
-                )
+
+                logger.info(f"Processing text input: {text[:50]}...")
+
+                # Create agent if none exists (text before voice)
+                if not state.agent:
+                    state.agent = ChatAgent(state.settings)
+                    state.agent.set_room(ctx.room)
+                    logger.info("Created ChatAgent for text input")
+
+                agent = state.agent
+                result = await agent._process_input(text)
+                response = agent._get_response(result, text)
+                await agent._send(response)
+
+                logger.info("Text response complete")
             except Exception as e:
-                logger.error(f"Text input processing failed: {e}")
+                logger.error(f"Text input failed: {e}", exc_info=True)
 
         asyncio.create_task(_handle())
 
@@ -513,7 +500,7 @@ async def entrypoint(ctx: JobContext):
     def on_stt_metrics(m: metrics.STTMetrics):
         """Log STT metrics including provider and audio duration."""
         logger.info(
-            f"STT call: provider={state.settings['stt_provider']} "
+            f"STT call: provider={state.settings.stt_provider} "
             f"audio_duration={m.audio_duration:.2f}s "
             f"latency={m.duration:.2f}s streamed={m.streamed}"
         )
@@ -536,7 +523,7 @@ async def entrypoint(ctx: JobContext):
             room=ctx.room,
             room_options=room_io.RoomOptions(
                 text_output=True,
-                audio_output=(state.settings["agent_mode"] == "chat"),
+                audio_output=(state.settings.agent_mode == "chat"),
             ),
         )
         state.session.on("user_state_changed", on_user_state_changed)
@@ -562,21 +549,15 @@ async def entrypoint(ctx: JobContext):
         )
         state.agent = None
 
-    async def _apply_settings(new_settings: dict):
+    async def _apply_settings(new_settings: AgentSettings):
         """Apply new settings, restarting session if needed."""
         old = state.settings
 
-        mode_changed = new_settings["agent_mode"] != old["agent_mode"]
-        stt_changed = new_settings["stt_provider"] != old["stt_provider"]
-        llm_changed = new_settings["llm_model"] != old["llm_model"]
-        tts_changed = new_settings["tts_enabled"] != old["tts_enabled"]
-        task_provider_changed = new_settings["task_agent_provider"] != old["task_agent_provider"]
-
-        if not (mode_changed or stt_changed or llm_changed or tts_changed or task_provider_changed):
+        if new_settings == old:
             return
 
         logger.info(f"Settings changed: {old} -> {new_settings}")
-        state.settings = new_settings.copy()
+        state.settings = new_settings
 
         await state.session.aclose()
         state.session = AgentSession(
@@ -591,7 +572,7 @@ async def entrypoint(ctx: JobContext):
             room=ctx.room,
             room_options=room_io.RoomOptions(
                 text_output=True,
-                audio_output=(new_settings["agent_mode"] == "chat"),
+                audio_output=(new_settings.agent_mode == "chat"),
             ),
         )
         state.session.on("user_state_changed", on_user_state_changed)
@@ -625,13 +606,8 @@ async def entrypoint(ctx: JobContext):
         if participant.metadata:
             try:
                 meta = json.loads(participant.metadata)
-                new_settings = state.settings.copy()
-                changed = False
-                for key in new_settings:
-                    if key in meta and meta[key] != new_settings[key]:
-                        new_settings[key] = meta[key]
-                        changed = True
-                if changed:
+                new_settings = AgentSettings.from_dict(meta)
+                if new_settings != state.settings:
                     asyncio.create_task(_apply_settings(new_settings))
             except json.JSONDecodeError:
                 pass

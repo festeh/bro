@@ -7,7 +7,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
 
-from ai.config import get_provider_config, settings
+from ai.config import settings
+from ai.models_config import get_default_llm, get_provider
 from ai.logging_config import get_graph_logger
 from ai.models import Intent, IntentClassification
 from ai.search import format_search_results, search_web
@@ -42,21 +43,25 @@ Classification guidelines:
 
 
 def create_llm(provider: str | None = None) -> ChatOpenAI:
-    """Create the LLM client with configured provider."""
+    """Create the LLM client with configured provider.
+
+    Uses models_config as single source of truth.
+    """
     if provider:
-        config = get_provider_config(provider)
-        log.debug("llm_created", provider=provider, model=config["model"])
+        provider_config = get_provider(provider)
+        log.debug("llm_created", provider=provider)
         return ChatOpenAI(
-            base_url=config["base_url"],  # type: ignore[call-arg]
-            api_key=config["api_key"],  # type: ignore[call-arg]
-            model=config["model"],  # type: ignore[call-arg]
+            base_url=provider_config.base_url,  # type: ignore[call-arg]
+            api_key=provider_config.api_key,  # type: ignore[call-arg]
             streaming=True,
         )
-    log.debug("llm_created", provider="default", model=settings.llm_model)
+    # Use default model from models_config
+    model = get_default_llm()
+    log.debug("llm_created", provider=model.provider, model=model.model_id)
     return ChatOpenAI(
-        base_url=settings.llm_base_url,  # type: ignore[call-arg]
-        api_key=settings.llm_api_key,  # type: ignore[call-arg]
-        model=settings.llm_model,  # type: ignore[call-arg]
+        base_url=model.base_url,  # type: ignore[call-arg]
+        api_key=model.api_key,  # type: ignore[call-arg]
+        model=model.model_id,  # type: ignore[call-arg]
         streaming=True,
     )
 
@@ -97,24 +102,14 @@ async def classify_intent(
             if hasattr(m, "type") and m.type == "human":
                 classification_messages.append(HumanMessage(content=m.content))
 
-    try:
-        result = await classifier.ainvoke(classification_messages)
-        log.info(
-            "intent_classified",
-            intent=result.intent,
-            confidence=result.confidence,
-            response=result.response[:80] + "..." if len(result.response) > 80 else result.response,
-        )
-        return result  # type: ignore[return-value]
-    except Exception as e:
-        log.error("classification_failed", error=str(e))
-        # Fallback to direct_response on error
-        return IntentClassification(
-            intent=Intent.DIRECT_RESPONSE,
-            confidence=0.5,
-            search_query=None,
-            response="I'm having trouble processing your request. Could you try rephrasing?",
-        )
+    result = await classifier.ainvoke(classification_messages)
+    log.info(
+        "intent_classified",
+        intent=result.intent,
+        confidence=result.confidence,
+        response=result.response[:80] + "..." if len(result.response) > 80 else result.response,
+    )
+    return result  # type: ignore[return-value]
 
 
 async def chat_node(state: MessagesState) -> MessagesState:

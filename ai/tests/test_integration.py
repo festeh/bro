@@ -8,14 +8,14 @@ To run these tests, ensure CHUTES_API_KEY is set in .env with a valid key.
 
 import pytest
 
-from ai.config import settings
 from ai.graph import classify_intent
 from ai.models import IntentClassification
+from ai.models_config import get_provider
 
 
 async def check_api_works() -> bool:
     """Check if the Chutes API is accessible with current key."""
-    if not settings.chutes_api_key:
+    if not get_provider("chutes").api_key:
         return False
     try:
         result = await classify_intent([("user", "test")], provider="chutes")
