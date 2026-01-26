@@ -39,11 +39,17 @@ class ImmediateTextEvent {
   final String segmentId;
   final String text;
   final String participantId;
+  final String? model;
+  final String? intent;
+  final String? responseType;
 
   ImmediateTextEvent({
     required this.segmentId,
     required this.text,
     required this.participantId,
+    this.model,
+    this.intent,
+    this.responseType,
   });
 }
 
@@ -305,6 +311,9 @@ class LiveKitService {
     final info = reader.info;
     final segmentId =
         info?.attributes[LiveKitAttributes.segmentId] ?? info?.id ?? '';
+    final model = info?.attributes[LiveKitAttributes.model];
+    final intent = info?.attributes[LiveKitAttributes.intent];
+    final responseType = info?.attributes[LiveKitAttributes.responseType];
 
     reader.listen(
       (chunk) {
@@ -317,6 +326,9 @@ class LiveKitService {
               segmentId: segmentId,
               text: text,
               participantId: participantId,
+              model: model,
+              intent: intent,
+              responseType: responseType,
             ),
           );
         } catch (e) {

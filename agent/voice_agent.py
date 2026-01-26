@@ -29,6 +29,9 @@ from livekit.plugins import deepgram, elevenlabs, openai, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from agent.constants import (
+    ATTR_INTENT,
+    ATTR_MODEL,
+    ATTR_RESPONSE_TYPE,
     ATTR_SEGMENT_ID,
     ATTR_TRANSCRIPTION_FINAL,
     TOPIC_LLM_STREAM,
@@ -136,6 +139,9 @@ class ChatAgent(Agent):
         self._session_warning_sent: bool = False
         self._session_monitor_task: asyncio.Task | None = None
         self._task_agent: TaskAgent | None = None
+        # Response metadata for current stream
+        self._current_intent: str | None = None
+        self._current_response_type: str = "llm_response"
 
     def set_room(self, room: rtc.Room):
         """Set room reference for immediate text streaming."""
@@ -165,12 +171,17 @@ class ChatAgent(Agent):
             return
 
         if not self._immediate_writer:
+            attrs = {
+                ATTR_SEGMENT_ID: self._segment_id,
+                ATTR_TRANSCRIPTION_FINAL: "false",
+                ATTR_RESPONSE_TYPE: self._current_response_type,
+                ATTR_MODEL: self._settings.llm_model,
+            }
+            if self._current_intent:
+                attrs[ATTR_INTENT] = self._current_intent
             self._immediate_writer = await self._room.local_participant.stream_text(
                 topic=TOPIC_LLM_STREAM,
-                attributes={
-                    ATTR_SEGMENT_ID: self._segment_id,
-                    ATTR_TRANSCRIPTION_FINAL: "false",
-                },
+                attributes=attrs,
             )
 
         await self._immediate_writer.write(text)
@@ -258,6 +269,8 @@ class ChatAgent(Agent):
 
         # Active task agent gets all messages
         if self._task_agent and self._task_agent.is_active:
+            self._current_intent = Intent.TASK_MANAGEMENT
+            self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
 
         # Classify intent
@@ -265,12 +278,19 @@ class ChatAgent(Agent):
             classification = await classify_intent([("user", text)])
         except Exception as e:
             logger.error(f"Intent classification failed: {e}", exc_info=True)
+            self._current_intent = None
+            self._current_response_type = "error"
             return Err(f"Configuration error: {e}")
 
         logger.debug(f"Intent: {classification.intent} (confidence: {classification.confidence:.2f})")
 
+        # Store intent for response metadata
+        self._current_intent = classification.intent
+        self._current_response_type = "llm_response"
+
         # Route task management to task agent
         if classification.intent == Intent.TASK_MANAGEMENT:
+            self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
 
         # Default LLM flow
@@ -284,6 +304,9 @@ class ChatAgent(Agent):
                 provider=self._settings.task_agent_provider,
             )
             logger.info("Created TaskAgent")
+
+        # Activate so subsequent messages route here (e.g., "y" for confirmation)
+        self._task_agent.activate()
 
         try:
             response = await self._task_agent.process_message(text)
@@ -351,12 +374,17 @@ class ChatAgent(Agent):
             return
 
         self._segment_id = f"RESP_{uuid.uuid4().hex[:8]}"
+        attrs = {
+            ATTR_SEGMENT_ID: self._segment_id,
+            ATTR_TRANSCRIPTION_FINAL: "false",
+            ATTR_RESPONSE_TYPE: self._current_response_type,
+            ATTR_MODEL: self._settings.llm_model,
+        }
+        if self._current_intent:
+            attrs[ATTR_INTENT] = self._current_intent
         writer = await self._room.local_participant.stream_text(
             topic=TOPIC_LLM_STREAM,
-            attributes={
-                ATTR_SEGMENT_ID: self._segment_id,
-                ATTR_TRANSCRIPTION_FINAL: "false",
-            },
+            attributes=attrs,
         )
 
         try:

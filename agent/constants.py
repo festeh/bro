@@ -8,6 +8,11 @@ TOPIC_TEXT_INPUT = "lk.text_input"        # Text messages from client
 ATTR_SEGMENT_ID = "lk.segment_id"
 ATTR_TRANSCRIPTION_FINAL = "lk.transcription_final"
 
+# Response metadata attributes
+ATTR_RESPONSE_TYPE = "lk.response_type"
+ATTR_MODEL = "lk.model"
+ATTR_INTENT = "lk.intent"
+
 # Task agent configuration
 DIMAIST_CLI_PATH = "dimaist-cli"  # Default path, can be overridden via env
 TASK_AGENT_TIMEOUT = 30.0  # CLI command timeout in seconds

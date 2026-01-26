@@ -10,4 +10,8 @@ class LiveKitTopics {
 class LiveKitAttributes {
   static const segmentId = 'lk.segment_id';
   static const transcriptionFinal = 'lk.transcription_final';
+  // Response metadata
+  static const responseType = 'lk.response_type';
+  static const model = 'lk.model';
+  static const intent = 'lk.intent';
 }

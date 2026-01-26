@@ -6,6 +6,9 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   MessageStatus status;
+  String? model;
+  String? intent;
+  String? responseType;
 
   ChatMessage({
     required this.id,
@@ -13,6 +16,9 @@ class ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.status = MessageStatus.complete,
+    this.model,
+    this.intent,
+    this.responseType,
   });
 
   bool get isStreaming => status == MessageStatus.streaming;

@@ -88,7 +88,14 @@ class ChatPageState extends State<ChatPage> {
   }
 
   // Add a new message or update existing streaming message
-  void _addOrUpdateMessage(String text, {required bool isUser, bool streaming = false}) {
+  void _addOrUpdateMessage(
+    String text, {
+    required bool isUser,
+    bool streaming = false,
+    String? model,
+    String? intent,
+    String? responseType,
+  }) {
     final existing = _findStreamingMessage(isUser: isUser);
 
     if (existing != null && streaming) {
@@ -105,6 +112,9 @@ class ChatPageState extends State<ChatPage> {
         isUser: isUser,
         timestamp: DateTime.now(),
         status: streaming ? MessageStatus.streaming : MessageStatus.complete,
+        model: model,
+        intent: intent,
+        responseType: responseType,
       ));
     }
   }
@@ -197,8 +207,19 @@ class ChatPageState extends State<ChatPage> {
       final assistantMsg = _findStreamingMessage(isUser: false);
       if (assistantMsg != null) {
         assistantMsg.text = '${assistantMsg.text}${event.text}';
+        // Update metadata if not set yet
+        assistantMsg.model ??= event.model;
+        assistantMsg.intent ??= event.intent;
+        assistantMsg.responseType ??= event.responseType;
       } else {
-        _addOrUpdateMessage(event.text, isUser: false, streaming: true);
+        _addOrUpdateMessage(
+          event.text,
+          isUser: false,
+          streaming: true,
+          model: event.model,
+          intent: event.intent,
+          responseType: event.responseType,
+        );
       }
     });
 
@@ -364,6 +385,27 @@ class _MessageBubble extends StatelessWidget {
 
   const _MessageBubble({super.key, required this.message});
 
+  IconData _getIntentIcon(String? intent) {
+    switch (intent) {
+      case 'task_management':
+        return Icons.task_alt;
+      case 'web_search':
+        return Icons.search;
+      case 'end_dialog':
+        return Icons.waving_hand;
+      case 'direct_response':
+      default:
+        return Icons.smart_toy_outlined;
+    }
+  }
+
+  String _formatModel(String? model) {
+    if (model == null) return '';
+    // Extract last part after / for cleaner display
+    final parts = model.split('/');
+    return parts.last;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
@@ -374,34 +416,82 @@ class _MessageBubble extends StatelessWidget {
             ? '${message.text}...'
             : message.text;
 
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppTokens.spacingSm),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.spacingMd,
-          vertical: AppTokens.spacingSm,
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
-        decoration: BoxDecoration(
-          color: isUser
-              ? isStreaming
-                  ? AppTokens.accentPrimary.withValues(alpha: 0.7)
-                  : AppTokens.accentPrimary
-              : isStreaming
-                  ? AppTokens.backgroundTertiary.withValues(alpha: 0.7)
-                  : AppTokens.backgroundTertiary,
-          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-        ),
-        child: Text(
-          displayText,
-          style: TextStyle(
-            color: AppTokens.textPrimary,
-            fontSize: AppTokens.fontSizeMd,
+    final bubble = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTokens.spacingMd,
+        vertical: AppTokens.spacingSm,
+      ),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.65,
+      ),
+      decoration: BoxDecoration(
+        color: isUser
+            ? isStreaming
+                ? AppTokens.accentPrimary.withValues(alpha: 0.7)
+                : AppTokens.accentPrimary
+            : isStreaming
+                ? AppTokens.backgroundTertiary.withValues(alpha: 0.7)
+                : AppTokens.backgroundTertiary,
+        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            displayText,
+            style: TextStyle(
+              color: AppTokens.textPrimary,
+              fontSize: AppTokens.fontSizeMd,
+            ),
           ),
+          // Model badge for assistant messages
+          if (!isUser && message.model != null) ...[
+            const SizedBox(height: AppTokens.spacingXs),
+            Text(
+              _formatModel(message.model),
+              style: TextStyle(
+                color: AppTokens.textTertiary,
+                fontSize: AppTokens.fontSizeXs,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    // User messages: just the bubble, right-aligned
+    if (isUser) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppTokens.spacingSm),
+          child: bubble,
         ),
+      );
+    }
+
+    // Assistant messages: icon + bubble, left-aligned
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTokens.spacingSm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(right: AppTokens.spacingSm),
+            decoration: BoxDecoration(
+              color: AppTokens.backgroundTertiary,
+              borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+            ),
+            child: Icon(
+              _getIntentIcon(message.intent),
+              size: 16,
+              color: AppTokens.textSecondary,
+            ),
+          ),
+          Flexible(child: bubble),
+        ],
       ),
     );
   }
