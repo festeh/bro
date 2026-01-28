@@ -70,6 +70,7 @@ class AgentSettings:
     tts_enabled: bool = True
     task_agent_provider: str = "groq"
     agent_mode: str = "chat"
+    excluded_agents: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "AgentSettings":
@@ -79,6 +80,7 @@ class AgentSettings:
             tts_enabled=d.get("tts_enabled", True),
             task_agent_provider=d.get("task_agent_provider", "groq"),
             agent_mode=d.get("agent_mode", "chat"),
+            excluded_agents=d.get("excluded_agents", []),
         )
 
 
@@ -250,8 +252,10 @@ class ChatAgent(Agent):
     async def _process_input(self, text: str) -> Result[str | None]:
         """Process user input. Returns Ok(response) or Ok(None) for default LLM, Err on failure."""
 
-        # Active task agent gets all messages
-        if self._task_agent and self._task_agent.is_active:
+        task_agent_enabled = "task" not in self._settings.excluded_agents
+
+        # Active task agent gets all messages (if still enabled)
+        if self._task_agent and self._task_agent.is_active and task_agent_enabled:
             self._current_intent = Intent.TASK_MANAGEMENT
             self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
@@ -271,8 +275,8 @@ class ChatAgent(Agent):
         self._current_intent = classification.intent
         self._current_response_type = "llm_response"
 
-        # Route task management to task agent
-        if classification.intent == Intent.TASK_MANAGEMENT:
+        # Route task management to task agent (if enabled)
+        if classification.intent == Intent.TASK_MANAGEMENT and task_agent_enabled:
             self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
 
