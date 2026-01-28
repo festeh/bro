@@ -56,6 +56,7 @@ class _HomePageState extends State<HomePage> {
   SttProvider _sttProvider = SttProvider.deepgram;
   late Model _llmModel;
   bool _ttsEnabled = true;
+  Set<String> _excludedAgents = {};
   bool _isRecording = false;
   bool _isLoading = false;
   String? _currentEgressId;
@@ -80,10 +81,12 @@ class _HomePageState extends State<HomePage> {
     _sttProvider = widget.settingsService.sttProvider;
     _llmModel = widget.settingsService.llmModel;
     _ttsEnabled = widget.settingsService.ttsEnabled;
+    _excludedAgents = widget.settingsService.excludedAgents;
     // Apply to LiveKitService (will be sent on connect)
     widget.liveKitService.setSttProvider(_sttProvider);
     widget.liveKitService.setLlmModel(_llmModel);
     widget.liveKitService.setTtsEnabled(_ttsEnabled);
+    widget.liveKitService.setExcludedAgents(_excludedAgents);
     _player = Player();
     _init();
   }
@@ -342,6 +345,12 @@ class _HomePageState extends State<HomePage> {
     widget.settingsService.setTtsEnabled(enabled);
   }
 
+  void _onExcludedAgentsChanged(Set<String> excluded) {
+    setState(() => _excludedAgents = excluded);
+    widget.liveKitService.setExcludedAgents(excluded);
+    widget.settingsService.setExcludedAgents(excluded);
+  }
+
   void _onModeChanged(AppMode mode) {
     setState(() => _currentMode = mode);
     // Update agent mode based on app mode
@@ -364,23 +373,6 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_currentMode == AppMode.chat ? 'Chat' : 'Recordings'),
-        actions: [
-          if (_currentMode == AppMode.chat)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              color: AppTokens.textSecondary,
-              onPressed: () => _chatPageKey.currentState?.clearChat(),
-              tooltip: 'Clear chat',
-            ),
-          _ConnectionIndicator(
-              status: _connectionStatus,
-              isAgentConnected: _isAgentConnected,
-            ),
-          const SizedBox(width: AppTokens.spacingMd),
-        ],
-      ),
       body: Row(
         children: [
           AppSidebar(
@@ -392,6 +384,8 @@ class _HomePageState extends State<HomePage> {
             onLlmModelChanged: _onLlmModelChanged,
             ttsEnabled: _ttsEnabled,
             onTtsEnabledChanged: _onTtsEnabledChanged,
+            excludedAgents: _excludedAgents,
+            onExcludedAgentsChanged: _onExcludedAgentsChanged,
           ),
           Expanded(child: _buildMainContent()),
         ],
@@ -475,6 +469,8 @@ class _HomePageState extends State<HomePage> {
         },
         ttsEnabled: _ttsEnabled,
         onTtsEnabledChanged: _onTtsEnabledChanged,
+        excludedAgents: _excludedAgents,
+        onExcludedAgentsChanged: _onExcludedAgentsChanged,
       ),
     );
   }
@@ -620,6 +616,8 @@ class _SettingsSheet extends StatelessWidget {
   final ValueChanged<Model> onLlmModelChanged;
   final bool ttsEnabled;
   final ValueChanged<bool> onTtsEnabledChanged;
+  final Set<String> excludedAgents;
+  final ValueChanged<Set<String>> onExcludedAgentsChanged;
 
   const _SettingsSheet({
     required this.sttProvider,
@@ -628,6 +626,8 @@ class _SettingsSheet extends StatelessWidget {
     required this.onLlmModelChanged,
     required this.ttsEnabled,
     required this.onTtsEnabledChanged,
+    required this.excludedAgents,
+    required this.onExcludedAgentsChanged,
   });
 
   @override
@@ -699,6 +699,33 @@ class _SettingsSheet extends StatelessWidget {
               activeTrackColor: AppTokens.accentPrimary,
             ),
           ),
+          const SizedBox(height: AppTokens.spacingLg),
+          const Text(
+            'Agents',
+            style: TextStyle(
+              color: AppTokens.textSecondary,
+              fontSize: AppTokens.fontSizeMd,
+              fontWeight: AppTokens.fontWeightMedium,
+            ),
+          ),
+          const SizedBox(height: AppTokens.spacingSm),
+          ..._availableAgents.map((agent) {
+            final isEnabled = !excludedAgents.contains(agent.id);
+            return _AgentTile(
+              name: agent.name,
+              icon: agent.icon,
+              isEnabled: isEnabled,
+              onChanged: (enabled) {
+                final newExcluded = Set<String>.from(excludedAgents);
+                if (enabled) {
+                  newExcluded.remove(agent.id);
+                } else {
+                  newExcluded.add(agent.id);
+                }
+                onExcludedAgentsChanged(newExcluded);
+              },
+            );
+          }),
           const SizedBox(height: AppTokens.spacingMd),
         ],
       ),
@@ -735,6 +762,72 @@ class _SettingRow extends StatelessWidget {
         ),
         child,
       ],
+    );
+  }
+}
+
+/// Available agents that can be enabled/disabled.
+const _availableAgents = [
+  (id: 'task', name: 'Tasks', icon: Icons.task_alt),
+];
+
+class _AgentTile extends StatelessWidget {
+  final String name;
+  final IconData icon;
+  final bool isEnabled;
+  final ValueChanged<bool> onChanged;
+
+  const _AgentTile({
+    required this.name,
+    required this.icon,
+    required this.isEnabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!isEnabled),
+      borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.spacingSm),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: isEnabled,
+                onChanged: (value) => onChanged(value ?? false),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                activeColor: AppTokens.accentPrimary,
+                side: const BorderSide(color: AppTokens.textTertiary),
+              ),
+            ),
+            const SizedBox(width: AppTokens.spacingSm),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTokens.backgroundTertiary,
+                borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+              ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: AppTokens.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppTokens.spacingSm),
+            Text(
+              name,
+              style: const TextStyle(
+                color: AppTokens.textPrimary,
+                fontSize: AppTokens.fontSizeMd,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

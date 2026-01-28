@@ -8,6 +8,7 @@ class SettingsService {
   static const String _keySttProvider = 'sttProvider';
   static const String _keyLlmModelId = 'llmModelId';
   static const String _keyTtsEnabled = 'ttsEnabled';
+  static const String _keyExcludedAgents = 'excludedAgents';
 
   late final SharedPreferences _prefs;
 
@@ -50,5 +51,15 @@ class SettingsService {
 
   Future<void> setTtsEnabled(bool enabled) async {
     await _prefs.setBool(_keyTtsEnabled, enabled);
+  }
+
+  // Excluded Agents (empty = all enabled)
+  Set<String> get excludedAgents {
+    final list = _prefs.getStringList(_keyExcludedAgents);
+    return list?.toSet() ?? {};
+  }
+
+  Future<void> setExcludedAgents(Set<String> excluded) async {
+    await _prefs.setStringList(_keyExcludedAgents, excluded.toList());
   }
 }

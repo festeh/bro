@@ -75,6 +75,10 @@ sync-models:
     cp models.json app/assets/models.json
     @echo "Synced models.json to app/assets/"
 
+# Clean app build cache
+clean-app:
+    cd app && flutter clean
+
 # Run app on Linux desktop
 app: sync-models
     cd app && flutter run -d linux
@@ -142,6 +146,7 @@ lk-redis-stop:
 
 # Start all services with pm2 (redis, livekit, egress, agent)
 run:
+    pm2 delete all 2>/dev/null || true
     pm2 start ecosystem.config.cjs
 
 # View logs for a specific process (e.g., just logs agent)

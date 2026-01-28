@@ -15,6 +15,8 @@ class AppSidebar extends StatelessWidget {
   final ValueChanged<Model> onLlmModelChanged;
   final bool ttsEnabled;
   final ValueChanged<bool> onTtsEnabledChanged;
+  final Set<String> excludedAgents;
+  final ValueChanged<Set<String>> onExcludedAgentsChanged;
 
   const AppSidebar({
     super.key,
@@ -26,6 +28,8 @@ class AppSidebar extends StatelessWidget {
     required this.onLlmModelChanged,
     required this.ttsEnabled,
     required this.onTtsEnabledChanged,
+    required this.excludedAgents,
+    required this.onExcludedAgentsChanged,
   });
 
   @override
@@ -86,6 +90,11 @@ class AppSidebar extends StatelessWidget {
                   label: 'TTS',
                   value: ttsEnabled,
                   onChanged: onTtsEnabledChanged,
+                ),
+                const SizedBox(height: AppTokens.spacingMd),
+                _AgentSelector(
+                  excludedAgents: excludedAgents,
+                  onChanged: onExcludedAgentsChanged,
                 ),
               ],
             ),
@@ -271,6 +280,117 @@ class _SettingToggle extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Available agents that can be enabled/disabled.
+const _availableAgents = [
+  (id: 'task', name: 'Tasks', icon: Icons.task_alt),
+];
+
+class _AgentSelector extends StatelessWidget {
+  final Set<String> excludedAgents;
+  final ValueChanged<Set<String>> onChanged;
+
+  const _AgentSelector({
+    required this.excludedAgents,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Agents',
+          style: TextStyle(
+            color: AppTokens.textTertiary,
+            fontSize: AppTokens.fontSizeXs,
+            fontWeight: AppTokens.fontWeightMedium,
+          ),
+        ),
+        const SizedBox(height: AppTokens.spacingXs),
+        ..._availableAgents.map((agent) {
+          final isEnabled = !excludedAgents.contains(agent.id);
+          return _AgentRow(
+            name: agent.name,
+            icon: agent.icon,
+            isEnabled: isEnabled,
+            onChanged: (enabled) {
+              final newExcluded = Set<String>.from(excludedAgents);
+              if (enabled) {
+                newExcluded.remove(agent.id);
+              } else {
+                newExcluded.add(agent.id);
+              }
+              onChanged(newExcluded);
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _AgentRow extends StatelessWidget {
+  final String name;
+  final IconData icon;
+  final bool isEnabled;
+  final ValueChanged<bool> onChanged;
+
+  const _AgentRow({
+    required this.name,
+    required this.icon,
+    required this.isEnabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!isEnabled),
+      borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppTokens.spacingXs),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: isEnabled,
+                onChanged: (value) => onChanged(value ?? false),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                activeColor: AppTokens.accentPrimary,
+                side: const BorderSide(color: AppTokens.textTertiary),
+              ),
+            ),
+            const SizedBox(width: AppTokens.spacingSm),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppTokens.backgroundTertiary,
+                borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+              ),
+              child: Icon(
+                icon,
+                size: 14,
+                color: AppTokens.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppTokens.spacingSm),
+            Text(
+              name,
+              style: const TextStyle(
+                color: AppTokens.textSecondary,
+                fontSize: AppTokens.fontSizeXs,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -102,6 +102,7 @@ class LiveKitService {
   AgentMode _agentMode = AgentMode.chat;
   bool _ttsEnabled = true;
   TaskAgentProvider _taskAgentProvider = TaskAgentProvider.groq;
+  Set<String> _excludedAgents = {};
 
   final _connectionStatusController =
       StreamController<ConnectionStatus>.broadcast();
@@ -136,6 +137,7 @@ class LiveKitService {
   AgentMode get agentMode => _agentMode;
   bool get ttsEnabled => _ttsEnabled;
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
+  Set<String> get excludedAgents => _excludedAgents;
 
   LiveKitService({
     TokenService? tokenService,
@@ -272,6 +274,13 @@ class LiveKitService {
     _log.info('TaskAgent provider changed to: ${provider.name}');
   }
 
+  /// Set excluded agents (disabled agents)
+  void setExcludedAgents(Set<String> excluded) {
+    _excludedAgents = excluded;
+    _updateMetadata();
+    _log.info('Excluded agents: $excluded');
+  }
+
   void _updateMetadata() {
     final metadata = jsonEncode({
       'stt_provider': _sttProvider.name,
@@ -279,6 +288,7 @@ class LiveKitService {
       'agent_mode': _agentMode.name,
       'tts_enabled': _ttsEnabled,
       'task_agent_provider': _taskAgentProvider.name,
+      'excluded_agents': _excludedAgents.toList(),
     });
     _room?.localParticipant?.setMetadata(metadata);
   }
