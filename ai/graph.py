@@ -1,8 +1,9 @@
 """LangGraph chat graph with intent classification and persistence."""
 
 from collections.abc import AsyncIterator
+from typing import Any, cast
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
@@ -51,23 +52,23 @@ def create_llm(provider: str | None = None) -> ChatOpenAI:
         provider_config = get_provider(provider)
         log.debug("llm_created", provider=provider)
         return ChatOpenAI(
-            base_url=provider_config.base_url,  # type: ignore[call-arg]
-            api_key=provider_config.api_key,  # type: ignore[call-arg]
+            base_url=provider_config.base_url,  # pyright: ignore[reportArgumentType]
+            api_key=provider_config.api_key,  # pyright: ignore[reportArgumentType]
             streaming=True,
         )
     # Use default model from models_config
     model = get_default_llm()
     log.debug("llm_created", provider=model.provider, model=model.model_id)
     return ChatOpenAI(
-        base_url=model.base_url,  # type: ignore[call-arg]
-        api_key=model.api_key,  # type: ignore[call-arg]
-        model=model.model_id,  # type: ignore[call-arg]
+        base_url=model.base_url,  # pyright: ignore[reportArgumentType]
+        api_key=model.api_key,  # pyright: ignore[reportArgumentType]
+        model=model.model_id,  # pyright: ignore[reportArgumentType]
         streaming=True,
     )
 
 
 async def classify_intent(
-    messages: list, provider: str | None = None
+    messages: list[tuple[str, str] | BaseMessage], provider: str | None = None
 ) -> IntentClassification:
     """Classify the user's intent from their message.
 
@@ -102,14 +103,15 @@ async def classify_intent(
             if hasattr(m, "type") and m.type == "human":
                 classification_messages.append(HumanMessage(content=m.content))
 
-    result = await classifier.ainvoke(classification_messages)
+    raw_result = await classifier.ainvoke(classification_messages)
+    result = cast(IntentClassification, raw_result)
     log.info(
         "intent_classified",
         intent=result.intent,
         confidence=result.confidence,
         response=result.response[:80] + "..." if len(result.response) > 80 else result.response,
     )
-    return result  # type: ignore[return-value]
+    return result
 
 
 async def chat_node(state: MessagesState) -> MessagesState:
@@ -119,9 +121,9 @@ async def chat_node(state: MessagesState) -> MessagesState:
     return {"messages": [response]}
 
 
-def create_graph() -> StateGraph:
+def create_graph() -> StateGraph[MessagesState]:
     """Create the chat graph."""
-    graph = StateGraph(MessagesState)  # type: ignore[arg-type]
+    graph: StateGraph[MessagesState] = StateGraph(MessagesState)  # type: ignore[arg-type]
     graph.add_node("chat", chat_node)
     graph.add_edge(START, "chat")
     log.debug("graph_created")
@@ -139,8 +141,8 @@ async def create_app_with_checkpointer():
 
 
 async def stream_response(
-    app, thread_id: str, user_message: str, provider: str | None = None
-) -> AsyncIterator[str | dict]:
+    app: Any, thread_id: str, user_message: str, provider: str | None = None
+) -> AsyncIterator[str | dict[str, Any]]:
     """Stream the AI response with intent classification.
 
     Yields either:
@@ -230,8 +232,8 @@ async def stream_response(
         token_count = 0
 
         async for chunk in llm.astream(search_context_messages):
-            if chunk.content:
-                full_response += chunk.content  # type: ignore[operator]
+            if chunk.content and isinstance(chunk.content, str):
+                full_response += chunk.content
                 token_count += 1
                 yield chunk.content
 
@@ -255,8 +257,8 @@ async def stream_response(
         token_count = 0
 
         async for chunk in llm.astream(messages):
-            if chunk.content:
-                full_response += chunk.content  # type: ignore[operator]
+            if chunk.content and isinstance(chunk.content, str):
+                full_response += chunk.content
                 token_count += 1
                 yield chunk.content
 
@@ -274,7 +276,7 @@ async def stream_response(
         )
 
 
-async def get_history(app, thread_id: str) -> list[dict]:
+async def get_history(app: Any, thread_id: str) -> list[dict[str, Any]]:
     """Get conversation history for a thread."""
     config = {"configurable": {"thread_id": thread_id}}
     state = await app.aget_state(config)

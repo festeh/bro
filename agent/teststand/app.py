@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from typing import Any
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -10,7 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static
 
-from agent.task_agent import TaskAgent
+from agent.task_agent import AgentResponse, TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 
@@ -19,7 +20,7 @@ from .models import MODELS, Model, get_default_model, get_model_by_index
 from .widgets import ChatPanel, LogPanel, ParamsPanel
 
 
-class HelpScreen(ModalScreen):
+class HelpScreen(ModalScreen[None]):
     """Help overlay screen."""
 
     BINDINGS = [
@@ -51,7 +52,7 @@ class HelpScreen(ModalScreen):
             id="help-content",
         )
 
-    def action_dismiss(self) -> None:
+    def action_dismiss(self) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         self.app.pop_screen()
 
 
@@ -126,7 +127,7 @@ ParamsPanel {
 """
 
 
-class TestStandApp(App):
+class TestStandApp(App[None]):
     """Test Stand TUI Application."""
 
     TITLE = "Agent Test Stand"
@@ -213,6 +214,7 @@ class TestStandApp(App):
     @work(exclusive=True)
     async def _process_message(self, user_input: str) -> None:
         """Process user input through intent classification and routing."""
+        assert self._agent is not None, "Agent not initialized - on_mount not called?"
         chat = self.query_one(ChatPanel)
         params = self.query_one(ParamsPanel)
 
@@ -237,7 +239,7 @@ class TestStandApp(App):
             chat.add_message("[dim]Classifying...[/dim]")
 
             # Build messages for classifier
-            messages = list(self._history) + [("user", user_input)]
+            messages: list[tuple[str, str] | Any] = list(self._history) + [("user", user_input)]
 
             # Classify intent
             classification = await classify_intent(messages, provider=self._current_model.provider)
@@ -279,8 +281,9 @@ class TestStandApp(App):
         except Exception as e:
             chat.add_error(f"{type(e).__name__}: {e}")
 
-    def _show_task_response(self, response) -> None:
+    def _show_task_response(self, response: AgentResponse) -> None:
         """Display TaskAgent response in chat."""
+        assert self._agent is not None
         chat = self.query_one(ChatPanel)
 
         # Show CLI command if executed
@@ -298,18 +301,19 @@ class TestStandApp(App):
         chat.add_response(response.text)
 
         # Show pending if any
-        if self._agent.has_pending:
+        if self._agent.has_pending and self._agent._state and self._agent._state.pending_command:
             cmd = " ".join(self._agent._state.pending_command)
             chat.add_pending(cmd)
 
     def _get_pending_command(self) -> str | None:
         """Get the pending command string if any."""
-        if self._agent and self._agent.has_pending:
+        if self._agent and self._agent.has_pending and self._agent._state and self._agent._state.pending_command:
             return " ".join(self._agent._state.pending_command)
         return None
 
     def action_cycle_model(self) -> None:
         """Cycle to the next model."""
+        assert self._agent is not None
         self._model_index = (self._model_index + 1) % len(MODELS)
         self._current_model = get_model_by_index(self._model_index)
 
@@ -398,7 +402,7 @@ class TestStandApp(App):
         chat = self.query_one(ChatPanel)
         params = self.query_one(ParamsPanel)
 
-        response = self._agent.decline()
+        response = await self._agent.decline()
         chat.add_response(response.text)
 
         params.set_pending(None)

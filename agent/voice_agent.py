@@ -6,7 +6,7 @@ import uuid
 from collections.abc import AsyncIterable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import Any
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -38,30 +38,13 @@ from agent.constants import (
     TOPIC_TEXT_INPUT,
     TOPIC_VAD_STATUS,
 )
+from agent.result import Err, Ok, Result
 from agent.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 from ai.models_config import get_default_llm, get_llm_by_model_id
 
 load_dotenv()
-
-# Result type for error handling (like Rust's Result<T, E>)
-T = TypeVar("T")
-
-
-@dataclass
-class Ok(Generic[T]):
-    """Success result."""
-    value: T
-
-
-@dataclass
-class Err:
-    """Error result."""
-    error: str
-
-
-Result = Ok[T] | Err
 
 # Session inactivity timeout
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
@@ -89,7 +72,7 @@ class AgentSettings:
     agent_mode: str = "chat"
 
     @classmethod
-    def from_dict(cls, d: dict) -> "AgentSettings":
+    def from_dict(cls, d: dict[str, Any]) -> "AgentSettings":
         return cls(
             stt_provider=d.get("stt_provider", "deepgram"),
             llm_model=d.get("llm_model", get_default_llm().model_id),
@@ -115,7 +98,7 @@ def create_llm(model_id: str) -> openai.LLM | None:
 
     return openai.LLM(
         model=model.model_id,
-        base_url=model.base_url,
+        base_url=model.base_url,  # pyright: ignore[reportArgumentType]
         api_key=model.api_key,
     )
 
@@ -137,7 +120,7 @@ class ChatAgent(Agent):
         self._session_id: str = ""
         self._last_activity_time: float | None = None
         self._session_warning_sent: bool = False
-        self._session_monitor_task: asyncio.Task | None = None
+        self._session_monitor_task: asyncio.Task[None] | None = None
         self._task_agent: TaskAgent | None = None
         # Response metadata for current stream
         self._current_intent: str | None = None
@@ -296,7 +279,7 @@ class ChatAgent(Agent):
         # Default LLM flow
         return Ok(None)
 
-    async def _route_to_task_agent(self, text: str) -> Result[str]:
+    async def _route_to_task_agent(self, text: str) -> Result[str | None]:
         """Route message to task agent."""
         if not self._task_agent:
             self._task_agent = TaskAgent(
@@ -334,10 +317,10 @@ class ChatAgent(Agent):
                 await self._speak_and_stop(error)
             case Ok(None):
                 pass  # Let default LLM flow continue
-            case Ok(response):
+            case Ok(response) if response is not None:
                 await self._speak_and_stop(response)
 
-    async def _get_response(self, result: Result, user_input: str) -> AsyncIterable[str]:
+    async def _get_response(self, result: Result[str | None], user_input: str) -> AsyncIterable[str]:
         """Get response chunks - pre-made or generated."""
         match result:
             case Err(error):
@@ -345,7 +328,7 @@ class ChatAgent(Agent):
             case Ok(None):
                 async for chunk in self._generate_llm(user_input):
                     yield chunk
-            case Ok(response):
+            case Ok(response) if response is not None:
                 yield response
 
     async def _generate_llm(self, user_input: str) -> AsyncIterable[str]:
@@ -357,14 +340,14 @@ class ChatAgent(Agent):
             return
 
         llm_client = ChatOpenAI(
-            base_url=model.base_url,
-            api_key=model.api_key,
-            model=model.model_id,
+            base_url=model.base_url,  # pyright: ignore[reportArgumentType]
+            api_key=model.api_key,  # pyright: ignore[reportArgumentType]
+            model=model.model_id,  # pyright: ignore[reportArgumentType]
             streaming=True,
         )
 
         async for chunk in llm_client.astream([("user", user_input)]):
-            if chunk.content:
+            if chunk.content and isinstance(chunk.content, str):
                 yield chunk.content
 
     async def _send(self, chunks: AsyncIterable[str]) -> None:
@@ -422,7 +405,7 @@ class TranscribeAgent(Agent):
 
 def get_settings_from_metadata(ctx: JobContext) -> AgentSettings:
     """Extract settings from participant or room metadata."""
-    merged: dict = {}
+    merged: dict[str, Any] = {}
 
     for participant in ctx.room.remote_participants.values():
         if participant.metadata:
@@ -449,7 +432,7 @@ class SessionState:
 
     settings: AgentSettings = field(default_factory=AgentSettings)
     agent: "ChatAgent | None" = None
-    session: AgentSession | None = None
+    session: "AgentSession[Any] | None" = None
 
 
 server = AgentServer()
@@ -545,6 +528,7 @@ async def entrypoint(ctx: JobContext):
 
     async def _start_session():
         """Start agent session when user enables mic."""
+        assert state.session is not None
         agent = create_agent(state.settings)
         await state.session.start(
             agent=agent,
@@ -565,6 +549,7 @@ async def entrypoint(ctx: JobContext):
 
     async def _stop_session():
         """Stop agent session when user disables mic."""
+        assert state.session is not None
         if state.agent and isinstance(state.agent, ChatAgent):
             state.agent.stop_session_timer()
 
@@ -579,6 +564,7 @@ async def entrypoint(ctx: JobContext):
 
     async def _apply_settings(new_settings: AgentSettings):
         """Apply new settings, restarting session if needed."""
+        assert state.session is not None
         old = state.settings
 
         if new_settings == old:

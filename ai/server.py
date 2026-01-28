@@ -162,7 +162,7 @@ async def text_to_speech(text: str, voice: str = "en-US-AriaNeural"):
         communicate = edge_tts.Communicate(text, voice)
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
-                yield chunk["data"]
+                yield chunk["data"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
     return StreamingResponse(generate(), media_type="audio/mpeg")
 

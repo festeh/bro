@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import TypeVar
+from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -16,27 +16,13 @@ from pydantic import BaseModel, Field
 
 from agent.constants import MAX_CLI_RETRIES
 from agent.dimaist_cli import DimaistCLI
+from agent.result import Err, Ok, Result
 from ai.models_config import get_provider
 
-# Result type for flat error handling (mirrors voice_agent.py)
-T = TypeVar("T")
-
-
-@dataclass
-class Ok[T]:
-    """Success result."""
-    value: T
-
-
-@dataclass
-class Err:
-    """Error result."""
-    error: str
-
-
-Result = Ok[T] | Err
-
 logger = logging.getLogger("task-agent")
+
+# Type alias for LangChain message types
+LLMMessage = SystemMessage | HumanMessage | AIMessage
 
 
 class Action(StrEnum):
@@ -122,6 +108,14 @@ class TaskAgent:
     State is maintained in-memory for the session duration.
     """
 
+    _session_id: str
+    _cli: DimaistCLI
+    _state: TaskAgentState
+    _last_cli_command: list[str] | None
+    _last_cli_result: dict[str, Any] | list[Any] | None
+    _provider: str
+    _model: str | None
+
     def __init__(
         self,
         session_id: str,
@@ -139,9 +133,9 @@ class TaskAgent:
         """
         self._session_id = session_id
         self._cli = DimaistCLI(cli_path)  # DimaistCLI reads from env if None
-        self._state: TaskAgentState | None = TaskAgentState(session_id=session_id)
-        self._last_cli_command: list[str] | None = None  # For REPL debugging
-        self._last_cli_result: dict | list | None = None  # For REPL debugging
+        self._state = TaskAgentState(session_id=session_id)
+        self._last_cli_command = None  # For REPL debugging
+        self._last_cli_result = None  # For REPL debugging
         self._provider = provider
         self._model = model
 
@@ -229,7 +223,7 @@ class TaskAgent:
 
         # Build messages for LLM
         system_prompt = await self._build_system_prompt()
-        llm_messages = [SystemMessage(content=system_prompt)]
+        llm_messages: list[LLMMessage] = [SystemMessage(content=system_prompt)]
 
         for msg in self._state.messages:
             if msg.role == "user":
@@ -260,7 +254,7 @@ class TaskAgent:
 
         return response
 
-    async def _call_llm(self, messages: list) -> TaskAgentOutput:
+    async def _call_llm(self, messages: list[LLMMessage]) -> TaskAgentOutput:
         """Call LLM with structured output.
 
         Isolated wrapper for langchain which lacks proper type stubs.
@@ -268,9 +262,9 @@ class TaskAgent:
         """
         provider = get_provider(self._provider)
         llm = ChatOpenAI(
-            base_url=provider.base_url,  # type: ignore[call-arg]
-            api_key=provider.api_key,  # type: ignore[call-arg]
-            model=self._model,  # type: ignore[call-arg]
+            base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
+            api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
+            model=self._model,  # pyright: ignore[reportArgumentType]
         )
         structured_llm = llm.with_structured_output(
             TaskAgentOutput,
@@ -285,12 +279,12 @@ class TaskAgent:
         """Get configured LLM instance."""
         provider = get_provider(self._provider)
         return ChatOpenAI(
-            base_url=provider.base_url,  # type: ignore[call-arg]
-            api_key=provider.api_key,  # type: ignore[call-arg]
-            model=self._model,  # type: ignore[call-arg]
+            base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
+            api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
+            model=self._model,  # pyright: ignore[reportArgumentType]
         )
 
-    async def _summarize_query_results(self, result: dict | list, max_tasks: int = 20) -> str:
+    async def _summarize_query_results(self, result: dict[str, Any] | list[Any], max_tasks: int = 20) -> str:
         """Summarize query results using LLM for natural language response."""
         import json
 
@@ -348,7 +342,7 @@ Guidelines:
 - Keep responses concise for voice
 """
 
-    async def _try_cli(self, cli_args: list[str]) -> Result[dict | list]:
+    async def _try_cli(self, cli_args: list[str]) -> Result[dict[str, Any] | list[Any]]:
         """Single CLI attempt. Returns Ok(result) or Err(message)."""
         try:
             result = await self._cli.run(*cli_args)
@@ -392,7 +386,7 @@ If unfixable (e.g., task doesn't exist, permission error), set can_fix=false.
 
         return None
 
-    async def _run_cli_with_retry(self, cli_args: list[str]) -> Result[dict | list]:
+    async def _run_cli_with_retry(self, cli_args: list[str]) -> Result[dict[str, Any] | list[Any]]:
         """Run CLI command with LLM-assisted retry on failure."""
         cli_help = await self._cli.get_help()
 

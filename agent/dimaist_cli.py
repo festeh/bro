@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 
 from agent.constants import DIMAIST_CLI_PATH, TASK_AGENT_TIMEOUT
 
@@ -17,6 +18,8 @@ logger = logging.getLogger("dimaist-cli")
 class CLIError(Exception):
     """CLI command failed."""
 
+    returncode: int
+
     def __init__(self, message: str, returncode: int = 1):
         super().__init__(message)
         self.returncode = returncode
@@ -24,6 +27,9 @@ class CLIError(Exception):
 
 class DimaistCLI:
     """Wrapper for dimaist-cli subprocess execution."""
+
+    _cli_path: str
+    _timeout: float
 
     def __init__(
         self,
@@ -39,7 +45,7 @@ class DimaistCLI:
         self._cli_path = cli_path or os.getenv("DIMAIST_CLI_PATH", DIMAIST_CLI_PATH)
         self._timeout = timeout or TASK_AGENT_TIMEOUT
 
-    async def run(self, *args: str) -> dict | list:
+    async def run(self, *args: str) -> dict[str, Any] | list[Any]:
         """Execute CLI command and return parsed JSON.
 
         Args:
@@ -58,12 +64,14 @@ class DimaistCLI:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
+        except FileNotFoundError:
+            raise CLIError(f"CLI not found: {self._cli_path}", returncode=-1) from None
+
+        try:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
                 timeout=self._timeout,
             )
-        except FileNotFoundError:
-            raise CLIError(f"CLI not found: {self._cli_path}", returncode=-1) from None
         except TimeoutError:
             proc.kill()
             raise CLIError(f"CLI timeout after {self._timeout}s", returncode=-1) from None
@@ -104,15 +112,3 @@ class DimaistCLI:
             return stderr.decode().strip()
         except (FileNotFoundError, TimeoutError):
             return "dimaist-cli not available"
-
-    async def check_available(self) -> bool:
-        """Check if CLI is available and working.
-
-        Returns:
-            True if CLI can be executed
-        """
-        try:
-            await self.run("task", "list")
-            return True
-        except CLIError:
-            return False
