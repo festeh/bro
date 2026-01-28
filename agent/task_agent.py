@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from agent.constants import MAX_CLI_RETRIES
 from agent.dimaist_cli import DimaistCLI
 from agent.result import Err, Ok, Result
+from ai.llm_logging import get_llm_callbacks
 from ai.models_config import get_provider
 
 logger = logging.getLogger("task-agent")
@@ -265,6 +266,7 @@ class TaskAgent:
             base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
             api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
             model=self._model,  # pyright: ignore[reportArgumentType]
+            callbacks=get_llm_callbacks("task_agent.process"),
         )
         structured_llm = llm.with_structured_output(
             TaskAgentOutput,
@@ -275,13 +277,14 @@ class TaskAgent:
             raise TypeError(f"Unexpected LLM output type: {type(result)}")
         return result
 
-    def _get_llm(self) -> ChatOpenAI:
+    def _get_llm(self, context: str = "task_agent") -> ChatOpenAI:
         """Get configured LLM instance."""
         provider = get_provider(self._provider)
         return ChatOpenAI(
             base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
             api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
             model=self._model,  # pyright: ignore[reportArgumentType]
+            callbacks=get_llm_callbacks(context),
         )
 
     async def _summarize_query_results(self, result: dict[str, Any] | list[Any], max_tasks: int = 20) -> str:
@@ -308,7 +311,7 @@ Query results:
 
 Current date: {self.today}
 """
-        llm = self._get_llm()
+        llm = self._get_llm("task_agent.summarize")
         messages = [HumanMessage(content=prompt)]
         response = await llm.ainvoke(messages)
         return str(response.content)
@@ -375,7 +378,7 @@ If the error is fixable by adjusting the command, provide corrected cli_args.
 If unfixable (e.g., task doesn't exist, permission error), set can_fix=false.
 """
         try:
-            llm = self._get_llm()
+            llm = self._get_llm("task_agent.fix_cli")
             structured_llm = llm.with_structured_output(FixOutput, method="function_calling")
             result = await structured_llm.ainvoke([HumanMessage(content=prompt)])
             if isinstance(result, FixOutput) and result.can_fix and result.cli_args:

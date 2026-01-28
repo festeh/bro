@@ -11,6 +11,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from ai.config import settings
 from ai.models_config import get_default_llm, get_provider
 from ai.logging_config import get_graph_logger
+from ai.llm_logging import get_llm_callbacks
 from ai.models import Intent, IntentClassification
 from ai.search import format_search_results, search_web
 
@@ -43,11 +44,16 @@ Classification guidelines:
 - Task management examples: "add task", "what's due today", "complete the milk task", "remind me to", "my tasks", "what do I need to do", "mark X as done\""""
 
 
-def create_llm(provider: str | None = None) -> ChatOpenAI:
+def create_llm(provider: str | None = None, context: str | None = None) -> ChatOpenAI:
     """Create the LLM client with configured provider.
 
     Uses models_config as single source of truth.
+
+    Args:
+        provider: Optional provider name override
+        context: Optional context for logging (e.g., "classify", "stream")
     """
+    callbacks = get_llm_callbacks(context)
     if provider:
         provider_config = get_provider(provider)
         log.debug("llm_created", provider=provider)
@@ -55,6 +61,7 @@ def create_llm(provider: str | None = None) -> ChatOpenAI:
             base_url=provider_config.base_url,  # pyright: ignore[reportArgumentType]
             api_key=provider_config.api_key,  # pyright: ignore[reportArgumentType]
             streaming=True,
+            callbacks=callbacks,
         )
     # Use default model from models_config
     model = get_default_llm()
@@ -64,6 +71,7 @@ def create_llm(provider: str | None = None) -> ChatOpenAI:
         api_key=model.api_key,  # pyright: ignore[reportArgumentType]
         model=model.model_id,  # pyright: ignore[reportArgumentType]
         streaming=True,
+        callbacks=callbacks,
     )
 
 
@@ -79,7 +87,7 @@ async def classify_intent(
     Returns:
         IntentClassification with intent, confidence, search_query, and response
     """
-    llm = create_llm(provider)
+    llm = create_llm(provider, context="graph.classify")
 
     # Use function calling for structured output (compatible with OpenAI-compatible APIs)
     classifier = llm.with_structured_output(
@@ -116,7 +124,7 @@ async def classify_intent(
 
 async def chat_node(state: MessagesState) -> MessagesState:
     """Process messages and generate a response."""
-    llm = create_llm()
+    llm = create_llm(context="graph.chat")
     response = await llm.ainvoke(state["messages"])
     return {"messages": [response]}
 
@@ -227,7 +235,7 @@ async def stream_response(
             )
         ]
 
-        llm = create_llm(provider)
+        llm = create_llm(provider, context="graph.search")
         full_response = ""
         token_count = 0
 
@@ -252,7 +260,7 @@ async def stream_response(
 
     else:
         # Direct response - stream the classified response or generate fresh
-        llm = create_llm(provider)
+        llm = create_llm(provider, context="graph.direct")
         full_response = ""
         token_count = 0
 
