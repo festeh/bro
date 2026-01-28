@@ -435,7 +435,7 @@ class SessionState:
     session: "AgentSession[Any] | None" = None
 
 
-server = AgentServer()
+server = AgentServer(port=8081)
 
 
 def prewarm(proc: JobProcess):
