@@ -18,7 +18,7 @@ from agent.constants import MAX_CLI_RETRIES
 from agent.dimaist_cli import DimaistCLI
 from agent.result import Err, Ok, Result
 from ai.llm_logging import get_llm_callbacks
-from ai.models_config import get_provider
+from ai.models_config import get_llm_by_model_id
 
 logger = logging.getLogger("task-agent")
 
@@ -114,31 +114,32 @@ class TaskAgent:
     _state: TaskAgentState
     _last_cli_command: list[str] | None
     _last_cli_result: dict[str, Any] | list[Any] | None
-    _provider: str
-    _model: str | None
+    _model_id: str
 
     def __init__(
         self,
         session_id: str,
+        model_id: str,
         cli_path: str | None = None,
-        provider: str = "groq",
-        model: str | None = "qwen/qwen3-32b",
     ) -> None:
         """Initialize task agent.
 
         Args:
             session_id: Session ID for this task agent instance
+            model_id: Model identifier from models.json (e.g., "qwen/qwen3-32b")
             cli_path: Path to dimaist-cli binary (default: from DIMAIST_CLI_PATH env)
-            provider: LLM provider name (chutes, groq, openrouter, gemini)
-            model: Model name override (None = use provider default)
+
+        Raises:
+            ValueError: If model_id is not found in models.json
         """
+        if not get_llm_by_model_id(model_id):
+            raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
         self._session_id = session_id
         self._cli = DimaistCLI(cli_path)  # DimaistCLI reads from env if None
         self._state = TaskAgentState(session_id=session_id)
         self._last_cli_command = None  # For REPL debugging
         self._last_cli_result = None  # For REPL debugging
-        self._provider = provider
-        self._model = model
+        self._model_id = model_id
 
     @property
     def current_datetime(self) -> str:
@@ -171,19 +172,19 @@ class TaskAgent:
         return self._state is not None and self._state.pending_command is not None
 
     @property
-    def provider(self) -> str:
-        """Current LLM provider."""
-        return self._provider
+    def model_id(self) -> str:
+        """Current model identifier."""
+        return self._model_id
 
-    @property
-    def model(self) -> str:
-        """Current model name (override or provider default)."""
-        return self._model or "default"
+    def set_model(self, model_id: str) -> None:
+        """Change model. Keeps conversation history.
 
-    def set_model(self, provider: str, model: str) -> None:
-        """Change provider and model. Keeps conversation history."""
-        self._provider = provider
-        self._model = model
+        Raises:
+            ValueError: If model_id is not found in models.json
+        """
+        if not get_llm_by_model_id(model_id):
+            raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
+        self._model_id = model_id
 
     async def confirm(self) -> AgentResponse:
         """Execute pending command (button press - no LLM)."""
@@ -261,13 +262,7 @@ class TaskAgent:
         Isolated wrapper for langchain which lacks proper type stubs.
         Runtime type check ensures correct return type.
         """
-        provider = get_provider(self._provider)
-        llm = ChatOpenAI(
-            base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
-            api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
-            model=self._model,  # pyright: ignore[reportArgumentType]
-            callbacks=get_llm_callbacks("task_agent.process"),
-        )
+        llm = self._get_llm("task_agent.process")
         structured_llm = llm.with_structured_output(
             TaskAgentOutput,
             method="function_calling",
@@ -279,11 +274,12 @@ class TaskAgent:
 
     def _get_llm(self, context: str = "task_agent") -> ChatOpenAI:
         """Get configured LLM instance."""
-        provider = get_provider(self._provider)
+        model = get_llm_by_model_id(self._model_id)
+        assert model is not None  # Validated in __init__/set_model
         return ChatOpenAI(
-            base_url=provider.base_url,  # pyright: ignore[reportArgumentType]
-            api_key=provider.api_key,  # pyright: ignore[reportArgumentType]
-            model=self._model,  # pyright: ignore[reportArgumentType]
+            base_url=model.base_url,  # pyright: ignore[reportArgumentType]
+            api_key=model.api_key,  # pyright: ignore[reportArgumentType]
+            model=model.model_id,  # pyright: ignore[reportArgumentType]
             callbacks=get_llm_callbacks(context),
         )
 

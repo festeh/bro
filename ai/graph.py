@@ -9,7 +9,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
 
 from ai.config import settings
-from ai.models_config import get_default_llm, get_provider
+from ai.models_config import get_llm_by_model_id
 from ai.logging_config import get_graph_logger
 from ai.llm_logging import get_llm_callbacks
 from ai.models import Intent, IntentClassification
@@ -44,27 +44,20 @@ Classification guidelines:
 - Task management examples: "add task", "what's due today", "complete the milk task", "remind me to", "my tasks", "what do I need to do", "mark X as done\""""
 
 
-def create_llm(provider: str | None = None, context: str | None = None) -> ChatOpenAI:
-    """Create the LLM client with configured provider.
-
-    Uses models_config as single source of truth.
+def create_llm(model_id: str, context: str | None = None) -> ChatOpenAI:
+    """Create the LLM client from model_id.
 
     Args:
-        provider: Optional provider name override
+        model_id: Model identifier from models.json (e.g., "qwen/qwen3-32b")
         context: Optional context for logging (e.g., "classify", "stream")
+
+    Raises:
+        ValueError: If model_id is not found in models.json
     """
+    model = get_llm_by_model_id(model_id)
+    if not model:
+        raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
     callbacks = get_llm_callbacks(context)
-    if provider:
-        provider_config = get_provider(provider)
-        log.debug("llm_created", provider=provider)
-        return ChatOpenAI(
-            base_url=provider_config.base_url,  # pyright: ignore[reportArgumentType]
-            api_key=provider_config.api_key,  # pyright: ignore[reportArgumentType]
-            streaming=True,
-            callbacks=callbacks,
-        )
-    # Use default model from models_config
-    model = get_default_llm()
     log.debug("llm_created", provider=model.provider, model=model.model_id)
     return ChatOpenAI(
         base_url=model.base_url,  # pyright: ignore[reportArgumentType]
@@ -76,18 +69,18 @@ def create_llm(provider: str | None = None, context: str | None = None) -> ChatO
 
 
 async def classify_intent(
-    messages: list[tuple[str, str] | BaseMessage], provider: str | None = None
+    messages: list[tuple[str, str] | BaseMessage], *, model_id: str
 ) -> IntentClassification:
     """Classify the user's intent from their message.
 
     Args:
         messages: The conversation messages including the latest user message
-        provider: Optional LLM provider to use
+        model_id: Model identifier from models.json
 
     Returns:
         IntentClassification with intent, confidence, search_query, and response
     """
-    llm = create_llm(provider, context="graph.classify")
+    llm = create_llm(model_id, context="graph.classify")
 
     # Use function calling for structured output (compatible with OpenAI-compatible APIs)
     classifier = llm.with_structured_output(
@@ -123,10 +116,12 @@ async def classify_intent(
 
 
 async def chat_node(state: MessagesState) -> MessagesState:
-    """Process messages and generate a response."""
-    llm = create_llm(context="graph.chat")
-    response = await llm.ainvoke(state["messages"])
-    return {"messages": [response]}
+    """Process messages and generate a response.
+
+    NOTE: Currently unused — stream_response bypasses the graph pipeline.
+    Keeping for potential future use with LangGraph.
+    """
+    raise NotImplementedError("chat_node requires model_id; use stream_response instead")
 
 
 def create_graph() -> StateGraph[MessagesState]:
@@ -149,7 +144,7 @@ async def create_app_with_checkpointer():
 
 
 async def stream_response(
-    app: Any, thread_id: str, user_message: str, provider: str | None = None
+    app: Any, thread_id: str, user_message: str, model_id: str
 ) -> AsyncIterator[str | dict[str, Any]]:
     """Stream the AI response with intent classification.
 
@@ -160,7 +155,7 @@ async def stream_response(
     log.debug(
         "stream_start",
         thread_id=thread_id,
-        provider=provider or "default",
+        model_id=model_id,
         message_length=len(user_message),
     )
 
@@ -175,7 +170,7 @@ async def stream_response(
     log.debug("history_loaded", thread_id=thread_id, history_length=len(messages) - 1)
 
     # Classify intent
-    classification = await classify_intent(messages, provider)
+    classification = await classify_intent(messages, model_id=model_id)
 
     # Log classification
     log.info(
@@ -235,7 +230,7 @@ async def stream_response(
             )
         ]
 
-        llm = create_llm(provider, context="graph.search")
+        llm = create_llm(model_id, context="graph.search")
         full_response = ""
         token_count = 0
 
@@ -260,7 +255,7 @@ async def stream_response(
 
     else:
         # Direct response - stream the classified response or generate fresh
-        llm = create_llm(provider, context="graph.direct")
+        llm = create_llm(model_id, context="graph.direct")
         full_response = ""
         token_count = 0
 

@@ -75,7 +75,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
             if message.get("type") == "message":
                 content = message.get("content", "")
-                provider = message.get("provider")
+                model_id = message.get("model_id")
 
                 if not content:
                     await websocket.send_json(
@@ -83,11 +83,17 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     )
                     continue
 
+                if not model_id:
+                    await websocket.send_json(
+                        {"type": "error", "message": "model_id is required"}
+                    )
+                    continue
+
                 message_id = str(uuid.uuid4())
                 ws_log.info(
                     "message_received",
                     thread_id=thread_id,
-                    provider=provider,
+                    model_id=model_id,
                     content_length=len(content),
                     message_id=message_id,
                 )
@@ -96,7 +102,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     chunk_count = 0
                     conversation_ended = False
                     async for chunk in stream_response(
-                        app_graph, thread_id, content, provider
+                        app_graph, thread_id, content, model_id
                     ):
                         if isinstance(chunk, dict):
                             # Special event (e.g., conversation_ended)
