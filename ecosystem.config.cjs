@@ -31,7 +31,7 @@ module.exports = {
     {
       name: 'agent',
       script: 'bash',
-      args: '-c "PYTHONPATH=$PWD uv run python agent/voice_agent.py dev"',
+      args: '-c "set -a && source .env && set +a && PYTHONPATH=$PWD uv run python agent/voice_agent.py dev"',
       autorestart: true,
       cwd: projectDir,
       out_file: `${logDir}/agent.log`,
@@ -40,7 +40,7 @@ module.exports = {
     {
       name: 'app',
       script: 'bash',
-      args: '-c "cd app && flutter run -d linux"',
+      args: '-c "until curl -s http://localhost:8081 >/dev/null 2>&1; do sleep 0.5; done && just sync-models && cd app && flutter run -d linux"',
       autorestart: false,
       cwd: projectDir,
       out_file: `${logDir}/app.log`,

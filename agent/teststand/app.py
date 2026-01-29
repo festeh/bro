@@ -174,8 +174,7 @@ class TestStandApp(App[None]):
         # Create agent with current model
         self._agent = TaskAgent(
             session_id=self._session_id,
-            provider=self._current_model.provider,
-            model=self._current_model.model_id,
+            model_id=self._current_model.model_id,
         )
 
         # Update params panel
@@ -242,7 +241,7 @@ class TestStandApp(App[None]):
             messages: list[tuple[str, str] | Any] = list(self._history) + [("user", user_input)]
 
             # Classify intent
-            classification = await classify_intent(messages, provider=self._current_model.provider)
+            classification = await classify_intent(messages, model_id=self._current_model.model_id)
 
             chat.add_intent(classification.intent.value, classification.confidence)
 
@@ -318,7 +317,7 @@ class TestStandApp(App[None]):
         self._current_model = get_model_by_index(self._model_index)
 
         # Update agent
-        self._agent.set_model(self._current_model.provider, self._current_model.model_id)
+        self._agent.set_model(self._current_model.model_id)
 
         # Update params panel
         params = self.query_one(ParamsPanel)
@@ -362,8 +361,7 @@ class TestStandApp(App[None]):
         self._session_id = f"teststand-{uuid.uuid4().hex[:8]}"
         self._agent = TaskAgent(
             session_id=self._session_id,
-            provider=self._current_model.provider,
-            model=self._current_model.model_id,
+            model_id=self._current_model.model_id,
         )
         self._history = []
 

@@ -68,7 +68,6 @@ class AgentSettings:
     stt_provider: str = "deepgram"
     llm_model: str = field(default_factory=lambda: get_default_llm().model_id)
     tts_enabled: bool = True
-    task_agent_provider: str = "groq"
     agent_mode: str = "chat"
     excluded_agents: list[str] = field(default_factory=list)
 
@@ -78,7 +77,6 @@ class AgentSettings:
             stt_provider=d.get("stt_provider", "deepgram"),
             llm_model=d.get("llm_model", get_default_llm().model_id),
             tts_enabled=d.get("tts_enabled", True),
-            task_agent_provider=d.get("task_agent_provider", "groq"),
             agent_mode=d.get("agent_mode", "chat"),
             excluded_agents=d.get("excluded_agents", []),
         )
@@ -262,7 +260,7 @@ class ChatAgent(Agent):
 
         # Classify intent
         try:
-            classification = await classify_intent([("user", text)])
+            classification = await classify_intent([("user", text)], model_id=self._settings.llm_model)
         except Exception as e:
             logger.error(f"Intent classification failed: {e}", exc_info=True)
             self._current_intent = None
@@ -288,7 +286,7 @@ class ChatAgent(Agent):
         if not self._task_agent:
             self._task_agent = TaskAgent(
                 session_id=self._session_id,
-                provider=self._settings.task_agent_provider,
+                model_id=self._settings.llm_model,
             )
             logger.info("Created TaskAgent")
 
@@ -439,7 +437,7 @@ class SessionState:
     session: "AgentSession[Any] | None" = None
 
 
-server = AgentServer()
+server = AgentServer(port=8081)
 
 
 def prewarm(proc: JobProcess):
