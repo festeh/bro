@@ -59,14 +59,13 @@ class AppSidebar extends StatelessWidget {
               horizontal: AppTokens.spacingSm,
               vertical: AppTokens.spacingMd,
             ),
-            child: Container(
-              height: 1,
-              color: AppTokens.backgroundTertiary,
-            ),
+            child: Container(height: 1, color: AppTokens.backgroundTertiary),
           ),
           // Settings section
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppTokens.spacingSm),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spacingSm,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -113,7 +112,6 @@ class AppSidebar extends StatelessWidget {
         return 'ElevenLabs';
     }
   }
-
 }
 
 class _NavItem extends StatelessWidget {
@@ -206,9 +204,7 @@ class _SettingDropdown<T> extends StatelessWidget {
         const SizedBox(height: AppTokens.spacingXs),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.spacingSm,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppTokens.spacingSm),
           decoration: BoxDecoration(
             color: AppTokens.backgroundTertiary,
             borderRadius: BorderRadius.circular(AppTokens.radiusSm),
@@ -285,18 +281,13 @@ class _SettingToggle extends StatelessWidget {
 }
 
 /// Available agents that can be enabled/disabled.
-const _availableAgents = [
-  (id: 'task', name: 'Tasks', icon: Icons.task_alt),
-];
+const _availableAgents = [(id: 'task', name: 'Tasks', icon: Icons.task_alt)];
 
 class _AgentSelector extends StatelessWidget {
   final Set<String> excludedAgents;
   final ValueChanged<Set<String>> onChanged;
 
-  const _AgentSelector({
-    required this.excludedAgents,
-    required this.onChanged,
-  });
+  const _AgentSelector({required this.excludedAgents, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -374,11 +365,7 @@ class _AgentRow extends StatelessWidget {
                 color: AppTokens.backgroundTertiary,
                 borderRadius: BorderRadius.circular(AppTokens.radiusSm),
               ),
-              child: Icon(
-                icon,
-                size: 14,
-                color: AppTokens.textSecondary,
-              ),
+              child: Icon(icon, size: 14, color: AppTokens.textSecondary),
             ),
             const SizedBox(width: AppTokens.spacingSm),
             Text(

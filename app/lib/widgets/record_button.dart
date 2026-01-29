@@ -87,17 +87,18 @@ class _RecordButtonState extends State<RecordButton>
             color: widget.isWarning
                 ? AppTokens.accentWarning
                 : widget.isRecording
-                    ? AppTokens.accentRecording
-                    : AppTokens.accentPrimary,
+                ? AppTokens.accentRecording
+                : AppTokens.accentPrimary,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: (widget.isWarning
-                        ? AppTokens.accentWarning
-                        : widget.isRecording
+                color:
+                    (widget.isWarning
+                            ? AppTokens.accentWarning
+                            : widget.isRecording
                             ? AppTokens.accentRecording
                             : AppTokens.accentPrimary)
-                    .withValues(alpha: 0.4),
+                        .withValues(alpha: 0.4),
                 blurRadius: 16,
                 spreadRadius: 2,
               ),

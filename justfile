@@ -179,22 +179,18 @@ backend-status:
 
 # Get all dependencies
 deps:
-    cd wear && flutter pub get
     cd app && flutter pub get
 
 # Clean builds
 clean:
-    cd wear && flutter clean
     cd app && flutter clean
 
 # Lint
 lint:
-    cd wear && flutter analyze
     cd app && flutter analyze
 
 # Format code
 fmt:
-    cd wear && dart format lib/
     cd app && dart format lib/
 
 # ─────────────────────────────────────────────────────────────

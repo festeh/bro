@@ -8,10 +8,7 @@ import '../services/livekit_service.dart';
 class WearVoicePage extends StatefulWidget {
   final LiveKitService liveKitService;
 
-  const WearVoicePage({
-    super.key,
-    required this.liveKitService,
-  });
+  const WearVoicePage({super.key, required this.liveKitService});
 
   @override
   State<WearVoicePage> createState() => _WearVoicePageState();
@@ -127,10 +124,7 @@ class _WearVoicePageState extends State<WearVoicePage> {
     return Container(
       width: 12,
       height: 12,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 
@@ -185,12 +179,6 @@ class _WearVoicePageState extends State<WearVoicePage> {
       text = 'Tap to speak';
     }
 
-    return Text(
-      text,
-      style: TextStyle(
-        color: Colors.grey[400],
-        fontSize: 14,
-      ),
-    );
+    return Text(text, style: TextStyle(color: Colors.grey[400], fontSize: 14));
   }
 }

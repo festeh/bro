@@ -11,11 +11,7 @@ class Provider {
   final String? baseUrl;
   final String apiKeyEnv;
 
-  const Provider({
-    required this.name,
-    this.baseUrl,
-    required this.apiKeyEnv,
-  });
+  const Provider({required this.name, this.baseUrl, required this.apiKeyEnv});
 
   factory Provider.fromJson(String name, Map<String, dynamic> json) {
     return Provider(
@@ -110,7 +106,9 @@ class ModelsConfig {
   /// Get the loaded instance. Throws if not loaded.
   static ModelsConfig get instance {
     if (_instance == null) {
-      throw StateError('ModelsConfig not loaded. Call ModelsConfig.load() first.');
+      throw StateError(
+        'ModelsConfig not loaded. Call ModelsConfig.load() first.',
+      );
     }
     return _instance!;
   }

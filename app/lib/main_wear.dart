@@ -36,10 +36,7 @@ void main() async {
 class WearVoiceApp extends StatefulWidget {
   final LiveKitService liveKitService;
 
-  const WearVoiceApp({
-    super.key,
-    required this.liveKitService,
-  });
+  const WearVoiceApp({super.key, required this.liveKitService});
 
   @override
   State<WearVoiceApp> createState() => _WearVoiceAppState();
@@ -57,9 +54,7 @@ class _WearVoiceAppState extends State<WearVoiceApp> {
     return MaterialApp(
       title: 'bro',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.black,
-      ),
+      theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black),
       home: WearVoicePage(liveKitService: widget.liveKitService),
     );
   }

@@ -107,7 +107,9 @@ class _HomePageState extends State<HomePage> {
     });
 
     // Subscribe to agent connection status
-    _agentConnectedSub = widget.liveKitService.agentConnectedStream.listen((connected) {
+    _agentConnectedSub = widget.liveKitService.agentConnectedStream.listen((
+      connected,
+    ) {
       if (!mounted) return;
       setState(() => _isAgentConnected = connected);
     });
@@ -354,8 +356,9 @@ class _HomePageState extends State<HomePage> {
   void _onModeChanged(AppMode mode) {
     setState(() => _currentMode = mode);
     // Update agent mode based on app mode
-    final agentMode =
-        mode == AppMode.chat ? AgentMode.chat : AgentMode.transcribe;
+    final agentMode = mode == AppMode.chat
+        ? AgentMode.chat
+        : AgentMode.transcribe;
     widget.liveKitService.setAgentMode(agentMode);
   }
 
@@ -412,9 +415,9 @@ class _HomePageState extends State<HomePage> {
             tooltip: 'Settings',
           ),
           _ConnectionIndicator(
-              status: _connectionStatus,
-              isAgentConnected: _isAgentConnected,
-            ),
+            status: _connectionStatus,
+            isAgentConnected: _isAgentConnected,
+          ),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
@@ -442,10 +445,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildMainContent() {
     return _currentMode == AppMode.chat
-        ? ChatPage(
-            key: _chatPageKey,
-            liveKitService: widget.liveKitService,
-          )
+        ? ChatPage(key: _chatPageKey, liveKitService: widget.liveKitService)
         : _buildRecordingsContent();
   }
 
@@ -767,9 +767,7 @@ class _SettingRow extends StatelessWidget {
 }
 
 /// Available agents that can be enabled/disabled.
-const _availableAgents = [
-  (id: 'task', name: 'Tasks', icon: Icons.task_alt),
-];
+const _availableAgents = [(id: 'task', name: 'Tasks', icon: Icons.task_alt)];
 
 class _AgentTile extends StatelessWidget {
   final String name;
@@ -811,11 +809,7 @@ class _AgentTile extends StatelessWidget {
                 color: AppTokens.backgroundTertiary,
                 borderRadius: BorderRadius.circular(AppTokens.radiusSm),
               ),
-              child: Icon(
-                icon,
-                size: 16,
-                color: AppTokens.textSecondary,
-              ),
+              child: Icon(icon, size: 16, color: AppTokens.textSecondary),
             ),
             const SizedBox(width: AppTokens.spacingSm),
             Text(

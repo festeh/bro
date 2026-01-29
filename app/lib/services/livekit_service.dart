@@ -70,20 +70,17 @@ class SessionNotificationEvent {
     required this.participantId,
   });
 
-  int? get remainingSeconds =>
-      type == SessionNotificationType.sessionWarning
-          ? payload['remaining_seconds'] as int?
-          : null;
+  int? get remainingSeconds => type == SessionNotificationType.sessionWarning
+      ? payload['remaining_seconds'] as int?
+      : null;
 
-  String? get reason =>
-      type == SessionNotificationType.sessionTimeout
-          ? payload['reason'] as String?
-          : null;
+  String? get reason => type == SessionNotificationType.sessionTimeout
+      ? payload['reason'] as String?
+      : null;
 
-  double? get idleDuration =>
-      type == SessionNotificationType.sessionTimeout
-          ? (payload['idle_duration'] as num?)?.toDouble()
-          : null;
+  double? get idleDuration => type == SessionNotificationType.sessionTimeout
+      ? (payload['idle_duration'] as num?)?.toDouble()
+      : null;
 }
 
 class LiveKitService {
@@ -139,16 +136,15 @@ class LiveKitService {
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
   Set<String> get excludedAgents => _excludedAgents;
 
-  LiveKitService({
-    TokenService? tokenService,
-    String? wsUrl,
-    String? identity,
-  })  : _tokenService = tokenService ?? TokenService(),
-        _wsUrl = wsUrl ?? _defaultWsUrl,
-        _identity = identity ?? _defaultIdentity,
-        _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
+  LiveKitService({TokenService? tokenService, String? wsUrl, String? identity})
+    : _tokenService = tokenService ?? TokenService(),
+      _wsUrl = wsUrl ?? _defaultWsUrl,
+      _identity = identity ?? _defaultIdentity,
+      _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
     _llmModel = ModelsConfig.instance.defaultLlm;
-    _log.info('Created session with room: $_roomName, url: $_wsUrl, identity: $_identity');
+    _log.info(
+      'Created session with room: $_roomName, url: $_wsUrl, identity: $_identity',
+    );
   }
 
   Future<void> connect() async {
@@ -325,31 +321,31 @@ class LiveKitService {
     final intent = info?.attributes[LiveKitAttributes.intent];
     final responseType = info?.attributes[LiveKitAttributes.responseType];
 
-    reader.listen(
-      (chunk) {
-        try {
-          final text = utf8.decode(chunk.content.toList());
-          _log.fine('Chunk from $participantId: "$text"');
+    reader.listen((chunk) {
+      try {
+        final text = utf8.decode(chunk.content.toList());
+        _log.fine('Chunk from $participantId: "$text"');
 
-          _immediateTextController.add(
-            ImmediateTextEvent(
-              segmentId: segmentId,
-              text: text,
-              participantId: participantId,
-              model: model,
-              intent: intent,
-              responseType: responseType,
-            ),
-          );
-        } catch (e) {
-          _log.warning('Error decoding chunk: $e');
-        }
-      },
-      onError: (e) => _log.warning('Error in immediate text stream: $e'),
-    );
+        _immediateTextController.add(
+          ImmediateTextEvent(
+            segmentId: segmentId,
+            text: text,
+            participantId: participantId,
+            model: model,
+            intent: intent,
+            responseType: responseType,
+          ),
+        );
+      } catch (e) {
+        _log.warning('Error decoding chunk: $e');
+      }
+    }, onError: (e) => _log.warning('Error in immediate text stream: $e'));
   }
 
-  void _onSessionNotification(TextStreamReader reader, String participantId) async {
+  void _onSessionNotification(
+    TextStreamReader reader,
+    String participantId,
+  ) async {
     try {
       final text = await reader.readAll();
       final json = jsonDecode(text) as Map<String, dynamic>;
@@ -378,7 +374,9 @@ class LiveKitService {
         ..remove('type')
         ..remove('session_id');
 
-      _log.info('Session notification: $typeStr session=$sessionId payload=$payload');
+      _log.info(
+        'Session notification: $typeStr session=$sessionId payload=$payload',
+      );
 
       _sessionNotificationController.add(
         SessionNotificationEvent(

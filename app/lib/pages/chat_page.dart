@@ -14,10 +14,7 @@ final _log = Logger('ChatPage');
 class ChatPage extends StatefulWidget {
   final LiveKitService liveKitService;
 
-  const ChatPage({
-    super.key,
-    required this.liveKitService,
-  });
+  const ChatPage({super.key, required this.liveKitService});
 
   @override
   State<ChatPage> createState() => ChatPageState();
@@ -54,14 +51,16 @@ class ChatPageState extends State<ChatPage> {
       setState(() => _connectionStatus = status);
     });
 
-    _transcriptionSub =
-        widget.liveKitService.transcriptionStream.listen(_onTranscription);
+    _transcriptionSub = widget.liveKitService.transcriptionStream.listen(
+      _onTranscription,
+    );
 
-    _immediateTextSub =
-        widget.liveKitService.immediateTextStream.listen(_onImmediateText);
+    _immediateTextSub = widget.liveKitService.immediateTextStream.listen(
+      _onImmediateText,
+    );
 
-    _sessionNotificationSub =
-        widget.liveKitService.sessionNotificationStream.listen(_onSessionNotification);
+    _sessionNotificationSub = widget.liveKitService.sessionNotificationStream
+        .listen(_onSessionNotification);
 
     _connectionStatus = widget.liveKitService.isConnected
         ? ConnectionStatus.connected
@@ -106,16 +105,18 @@ class ChatPageState extends State<ChatPage> {
       _completeAllStreaming();
 
       // Add new message
-      _messages.add(ChatMessage(
-        id: _uuid.v4(),
-        text: text,
-        isUser: isUser,
-        timestamp: DateTime.now(),
-        status: streaming ? MessageStatus.streaming : MessageStatus.complete,
-        model: model,
-        intent: intent,
-        responseType: responseType,
-      ));
+      _messages.add(
+        ChatMessage(
+          id: _uuid.v4(),
+          text: text,
+          isUser: isUser,
+          timestamp: DateTime.now(),
+          status: streaming ? MessageStatus.streaming : MessageStatus.complete,
+          model: model,
+          intent: intent,
+          responseType: responseType,
+        ),
+      );
     }
   }
 
@@ -151,7 +152,11 @@ class ChatPageState extends State<ChatPage> {
           userMsg.text = _accumulatedFinals;
           userMsg.status = MessageStatus.complete;
         } else {
-          _addOrUpdateMessage(_accumulatedFinals, isUser: true, streaming: false);
+          _addOrUpdateMessage(
+            _accumulatedFinals,
+            isUser: true,
+            streaming: false,
+          );
         }
 
         // Start assistant streaming placeholder
@@ -172,7 +177,9 @@ class ChatPageState extends State<ChatPage> {
   void _onSessionNotification(SessionNotificationEvent event) {
     if (!mounted) return;
 
-    _log.info('Session notification: ${event.type} remaining=${event.remainingSeconds} idle=${event.idleDuration}');
+    _log.info(
+      'Session notification: ${event.type} remaining=${event.remainingSeconds} idle=${event.idleDuration}',
+    );
 
     if (event.type == SessionNotificationType.sessionReady) {
       _log.info('Session ready, activating');
@@ -413,8 +420,8 @@ class _MessageBubble extends StatelessWidget {
     final displayText = isStreaming && message.text.isEmpty
         ? '...'
         : isStreaming && isUser
-            ? '${message.text}...'
-            : message.text;
+        ? '${message.text}...'
+        : message.text;
 
     final bubble = Container(
       padding: const EdgeInsets.symmetric(
@@ -427,11 +434,11 @@ class _MessageBubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: isUser
             ? isStreaming
-                ? AppTokens.accentPrimary.withValues(alpha: 0.7)
-                : AppTokens.accentPrimary
+                  ? AppTokens.accentPrimary.withValues(alpha: 0.7)
+                  : AppTokens.accentPrimary
             : isStreaming
-                ? AppTokens.backgroundTertiary.withValues(alpha: 0.7)
-                : AppTokens.backgroundTertiary,
+            ? AppTokens.backgroundTertiary.withValues(alpha: 0.7)
+            : AppTokens.backgroundTertiary,
         borderRadius: BorderRadius.circular(AppTokens.radiusMd),
       ),
       child: Column(
@@ -526,10 +533,7 @@ class _BottomBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(
-              isSessionActive ? Icons.stop : Icons.mic,
-              size: 24,
-            ),
+            icon: Icon(isSessionActive ? Icons.stop : Icons.mic, size: 24),
             style: IconButton.styleFrom(
               backgroundColor: isSessionActive
                   ? AppTokens.accentRecording
