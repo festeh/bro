@@ -306,7 +306,12 @@ class TestStandApp(App[None]):
 
     def _get_pending_command(self) -> str | None:
         """Get the pending command string if any."""
-        if self._agent and self._agent.has_pending and self._agent._state and self._agent._state.pending_command:
+        if (
+            self._agent
+            and self._agent.has_pending
+            and self._agent._state
+            and self._agent._state.pending_command
+        ):
             return " ".join(self._agent._state.pending_command)
         return None
 

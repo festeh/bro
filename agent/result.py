@@ -1,9 +1,6 @@
 """Result type for flat error handling (like Rust's Result<T, E>)."""
 
 from dataclasses import dataclass
-from typing import TypeVar
-
-T = TypeVar("T")
 
 
 @dataclass
@@ -20,4 +17,4 @@ class Err:
     error: str
 
 
-Result = Ok[T] | Err
+type Result[T] = Ok[T] | Err

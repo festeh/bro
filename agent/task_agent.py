@@ -238,9 +238,7 @@ class TaskAgent:
             output = await self._call_llm(llm_messages)
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
-            return AgentResponse(
-                text="I'm having trouble processing that. Could you try again?"
-            )
+            return AgentResponse(text="I'm having trouble processing that. Could you try again?")
 
         logger.info(
             f"LLM output: action={output.action}, cli_args={output.cli_args}, "
@@ -283,7 +281,9 @@ class TaskAgent:
             callbacks=get_llm_callbacks(context),
         )
 
-    async def _summarize_query_results(self, result: dict[str, Any] | list[Any], max_tasks: int = 20) -> str:
+    async def _summarize_query_results(
+        self, result: dict[str, Any] | list[Any], max_tasks: int = 20
+    ) -> str:
         """Summarize query results using LLM for natural language response."""
         import json
 
@@ -359,12 +359,16 @@ Guidelines:
         """Ask LLM to fix CLI args based on error. Returns corrected args or None."""
 
         class FixOutput(BaseModel):
-            can_fix: bool = Field(description="Whether the error is fixable by adjusting the command")
-            cli_args: list[str] | None = Field(description="Corrected CLI args, or None if unfixable")
+            can_fix: bool = Field(
+                description="Whether the error is fixable by adjusting the command"
+            )
+            cli_args: list[str] | None = Field(
+                description="Corrected CLI args, or None if unfixable"
+            )
 
         prompt = f"""The CLI command failed. Fix it if possible.
 
-Command: {' '.join(cli_args)}
+Command: {" ".join(cli_args)}
 Error: {error}
 
 Available CLI commands:

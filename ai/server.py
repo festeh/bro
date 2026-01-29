@@ -78,15 +78,11 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 model_id = message.get("model_id")
 
                 if not content:
-                    await websocket.send_json(
-                        {"type": "error", "message": "Empty message"}
-                    )
+                    await websocket.send_json({"type": "error", "message": "Empty message"})
                     continue
 
                 if not model_id:
-                    await websocket.send_json(
-                        {"type": "error", "message": "model_id is required"}
-                    )
+                    await websocket.send_json({"type": "error", "message": "model_id is required"})
                     continue
 
                 message_id = str(uuid.uuid4())
@@ -101,23 +97,17 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 try:
                     chunk_count = 0
                     conversation_ended = False
-                    async for chunk in stream_response(
-                        app_graph, thread_id, content, model_id
-                    ):
+                    async for chunk in stream_response(app_graph, thread_id, content, model_id):
                         if isinstance(chunk, dict):
                             # Special event (e.g., conversation_ended)
                             await websocket.send_json(chunk)
                             if chunk.get("type") == "conversation_ended":
                                 conversation_ended = True
                         else:
-                            await websocket.send_json(
-                                {"type": "chunk", "content": chunk}
-                            )
+                            await websocket.send_json({"type": "chunk", "content": chunk})
                             chunk_count += 1
 
-                    await websocket.send_json(
-                        {"type": "done", "message_id": message_id}
-                    )
+                    await websocket.send_json({"type": "done", "message_id": message_id})
 
                     if conversation_ended:
                         ws_log.info(

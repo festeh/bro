@@ -188,10 +188,12 @@ clean:
 # Lint
 lint:
     cd app && flutter analyze
+    uv run ruff check agent ai
 
 # Format code
 fmt:
     cd app && dart format lib/
+    uv run ruff format agent ai
 
 # ─────────────────────────────────────────────────────────────
 # Python (shared monorepo)

@@ -64,18 +64,15 @@ for name, data in _config["providers"].items():
 
 # Parse models
 _llm_models: list[Model] = [
-    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"])
-    for m in _config["llm"]
+    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"]) for m in _config["llm"]
 ]
 
 _asr_models: list[Model] = [
-    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"])
-    for m in _config["asr"]
+    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"]) for m in _config["asr"]
 ]
 
 _tts_models: list[Model] = [
-    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"])
-    for m in _config["tts"]
+    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"]) for m in _config["tts"]
 ]
 
 

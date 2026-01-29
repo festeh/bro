@@ -58,6 +58,7 @@ class NotificationType(StrEnum):
     SESSION_TIMEOUT = "session_timeout"
     SESSION_READY = "session_ready"
 
+
 logger = logging.getLogger("voice-agent")
 
 
@@ -179,12 +180,14 @@ class ChatAgent(Agent):
         """Send session notification to frontend via LiveKit data topic."""
         if not self._room:
             return
-        msg = json.dumps({
-            "type": msg_type,
-            "session_id": self._session_id,
-            "timestamp": time.time(),
-            **payload,
-        })
+        msg = json.dumps(
+            {
+                "type": msg_type,
+                "session_id": self._session_id,
+                "timestamp": time.time(),
+                **payload,
+            }
+        )
         try:
             writer = await self._room.local_participant.stream_text(topic=TOPIC_VAD_STATUS)
             await writer.write(msg)
@@ -260,14 +263,18 @@ class ChatAgent(Agent):
 
         # Classify intent
         try:
-            classification = await classify_intent([("user", text)], model_id=self._settings.llm_model)
+            classification = await classify_intent(
+                [("user", text)], model_id=self._settings.llm_model
+            )
         except Exception as e:
             logger.error(f"Intent classification failed: {e}", exc_info=True)
             self._current_intent = None
             self._current_response_type = "error"
             return Err(f"Configuration error: {e}")
 
-        logger.debug(f"Intent: {classification.intent} (confidence: {classification.confidence:.2f})")
+        logger.debug(
+            f"Intent: {classification.intent} (confidence: {classification.confidence:.2f})"
+        )
 
         # Store intent for response metadata
         self._current_intent = classification.intent
@@ -322,7 +329,9 @@ class ChatAgent(Agent):
             case Ok(response) if response is not None:
                 await self._speak_and_stop(response)
 
-    async def _get_response(self, result: Result[str | None], user_input: str) -> AsyncIterable[str]:
+    async def _get_response(
+        self, result: Result[str | None], user_input: str
+    ) -> AsyncIterable[str]:
         """Get response chunks - pre-made or generated."""
         match result:
             case Err(error):
@@ -448,8 +457,6 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-
-
 @server.rtc_session()
 async def entrypoint(ctx: JobContext):
     logger.info(f"Starting voice agent for room: {ctx.room.name}")
@@ -482,6 +489,7 @@ async def entrypoint(ctx: JobContext):
     # Register text input handler (works without voice session)
     def on_text_input(reader: rtc.TextStreamReader, participant_id: str):
         """Handle text messages from client."""
+
         async def _handle():
             try:
                 text = await reader.read_all()
