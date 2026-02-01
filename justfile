@@ -108,9 +108,13 @@ app-device: sync-models
 app-build-linux: sync-models
     cd app && flutter build linux
 
-# Build Android APK
+# Build Android APK (release)
 app-build-android: sync-models
-    cd app && flutter build apk --debug
+    cd app && flutter build apk --flavor phone
+
+# Build and deploy phone APK to pCloud
+deploy-phone: app-build-android
+    cp app/build/app/outputs/flutter-apk/app-phone-release.apk ~/pCloudDrive/android-apps/bro/
 
 # ─────────────────────────────────────────────────────────────
 # Backend (pm2)
