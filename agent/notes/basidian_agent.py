@@ -21,7 +21,7 @@ from basidian.client import BasidianClient
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from agent.constants import BASIDIAN_URL
+from agent.constants import get_basidian_url
 from ai.llm_logging import get_llm_callbacks
 from ai.models_config import create_chat_llm, get_llm_by_model_id
 
@@ -149,7 +149,7 @@ class BasidianAgent:
             raise ValueError(f"Unknown model_id: {model_id!r}")
         self._session_id = session_id
         self._model_id = model_id
-        self._base_url = os.getenv("BASIDIAN_URL", BASIDIAN_URL)
+        self._base_url = get_basidian_url()
         self._state = BasidianAgentState(session_id=session_id)
 
     @property

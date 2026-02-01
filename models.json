@@ -39,16 +39,6 @@
       "extra_body": {"thinking": {"type": "disabled"}}
     },
     {
-      "name": "Kimi K2 Thinking",
-      "provider": "kimi",
-      "model_id": "kimi-k2-thinking"
-    },
-    {
-      "name": "Kimi K2",
-      "provider": "kimi",
-      "model_id": "kimi-k2-0905"
-    },
-    {
       "name": "DeepSeek V3.2",
       "provider": "openrouter",
       "model_id": "deepseek/deepseek-v3.2"

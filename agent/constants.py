@@ -1,3 +1,5 @@
+import os
+
 # Text stream topics
 TOPIC_TRANSCRIPTION = "lk.transcription"  # Synced with TTS
 TOPIC_LLM_STREAM = "lk.llm_stream"  # Immediate LLM output
@@ -19,4 +21,5 @@ TASK_AGENT_TIMEOUT = 30.0  # CLI command timeout in seconds
 MAX_CLI_RETRIES = 3  # LLM-assisted retry attempts on CLI failure
 
 # Basidian agent configuration
-BASIDIAN_URL = "http://localhost:8090"  # Default, overridable via BASIDIAN_URL env
+def get_basidian_url() -> str:
+    return os.environ["BASIDIAN_URL"]
