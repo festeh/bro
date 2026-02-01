@@ -4,21 +4,25 @@ Uses LangGraph app for state persistence via namespaced thread IDs.
 The LLM handles conversation context, pending confirmations, and CLI command generation.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from agent.constants import MAX_CLI_RETRIES
 from agent.dimaist_cli import DimaistCLI
 from agent.result import Err, Ok, Result
 from ai.llm_logging import get_llm_callbacks
-from ai.models_config import get_llm_by_model_id
+from ai.models_config import create_chat_llm, get_llm_by_model_id
 
 logger = logging.getLogger("task-agent")
 
@@ -272,14 +276,7 @@ class TaskAgent:
 
     def _get_llm(self, context: str = "task_agent") -> ChatOpenAI:
         """Get configured LLM instance."""
-        model = get_llm_by_model_id(self._model_id)
-        assert model is not None  # Validated in __init__/set_model
-        return ChatOpenAI(
-            base_url=model.base_url,  # pyright: ignore[reportArgumentType]
-            api_key=model.api_key,  # pyright: ignore[reportArgumentType]
-            model=model.model_id,  # pyright: ignore[reportArgumentType]
-            callbacks=get_llm_callbacks(context),
-        )
+        return create_chat_llm(self._model_id, callbacks=get_llm_callbacks(context))
 
     async def _summarize_query_results(
         self, result: dict[str, Any] | list[Any], max_tasks: int = 20

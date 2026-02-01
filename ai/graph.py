@@ -12,7 +12,7 @@ from ai.config import settings
 from ai.llm_logging import get_llm_callbacks
 from ai.logging_config import get_graph_logger
 from ai.models import Intent, IntentClassification
-from ai.models_config import get_llm_by_model_id
+from ai.models_config import create_chat_llm
 from ai.search import format_search_results, search_web
 
 log = get_graph_logger()
@@ -45,27 +45,10 @@ Classification guidelines:
 
 
 def create_llm(model_id: str, context: str | None = None) -> ChatOpenAI:
-    """Create the LLM client from model_id.
-
-    Args:
-        model_id: Model identifier from models.json (e.g., "qwen/qwen3-32b")
-        context: Optional context for logging (e.g., "classify", "stream")
-
-    Raises:
-        ValueError: If model_id is not found in models.json
-    """
-    model = get_llm_by_model_id(model_id)
-    if not model:
-        raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
+    """Create the LLM client from model_id."""
     callbacks = get_llm_callbacks(context)
-    log.debug("llm_created", provider=model.provider, model=model.model_id)
-    return ChatOpenAI(
-        base_url=model.base_url,  # pyright: ignore[reportArgumentType]
-        api_key=model.api_key,  # pyright: ignore[reportArgumentType]
-        model=model.model_id,  # pyright: ignore[reportArgumentType]
-        streaming=True,
-        callbacks=callbacks,
-    )
+    log.debug("llm_created", model=model_id)
+    return create_chat_llm(model_id, callbacks=callbacks)
 
 
 async def classify_intent(

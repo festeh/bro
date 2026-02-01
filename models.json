@@ -4,9 +4,12 @@
       "base_url": "https://api.groq.com/openai/v1",
       "api_key_env": "GROQ_API_KEY"
     },
-    "chutes": {
-      "base_url": "https://llm.chutes.ai/v1",
-      "api_key_env": "CHUTES_API_KEY"
+    "kimi": {
+      "base_url": "https://api.kimi.com/coding/v1",
+      "api_key_env": "KIMI_API_KEY",
+      "headers": {
+        "User-Agent": "KimiCLI/1.3"
+      }
     },
     "openrouter": {
       "base_url": "https://openrouter.ai/api/v1",
@@ -30,34 +33,20 @@
       "model_id": "qwen/qwen3-32b"
     },
     {
-      "name": "DeepSeek V3",
-      "provider": "chutes",
-      "model_id": "deepseek-ai/DeepSeek-V3-0324"
+      "name": "Kimi K2.5",
+      "provider": "kimi",
+      "model_id": "kimi-k2.5",
+      "extra_body": {"thinking": {"type": "disabled"}}
     },
     {
-      "name": "DeepSeek V3.1",
-      "provider": "chutes",
-      "model_id": "deepseek-ai/DeepSeek-V3.1-Terminus-TEE"
+      "name": "Kimi K2 Thinking",
+      "provider": "kimi",
+      "model_id": "kimi-k2-thinking"
     },
     {
       "name": "Kimi K2",
-      "provider": "chutes",
-      "model_id": "moonshotai/Kimi-K2-Thinking-TEE"
-    },
-    {
-      "name": "GLM 4.7",
-      "provider": "chutes",
-      "model_id": "zai-org/GLM-4.7-TEE"
-    },
-    {
-      "name": "MiMo V2",
-      "provider": "chutes",
-      "model_id": "XiaomiMiMo/MiMo-V2-Flash"
-    },
-    {
-      "name": "MiniMax M2.1",
-      "provider": "chutes",
-      "model_id": "MiniMaxAI/MiniMax-M2.1-TEE"
+      "provider": "kimi",
+      "model_id": "kimi-k2-0905"
     },
     {
       "name": "DeepSeek V3.2",

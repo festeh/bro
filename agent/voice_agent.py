@@ -9,7 +9,6 @@ from enum import StrEnum
 from typing import Any
 
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from livekit import rtc
 from livekit.agents import (
     Agent,
@@ -42,7 +41,7 @@ from agent.result import Err, Ok, Result
 from agent.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
-from ai.models_config import get_default_llm, get_llm_by_model_id
+from ai.models_config import create_chat_llm, get_default_llm, get_llm_by_model_id
 
 load_dotenv()
 
@@ -101,6 +100,8 @@ def create_llm(model_id: str) -> openai.LLM | None:
         model=model.model_id,
         base_url=model.base_url,  # pyright: ignore[reportArgumentType]
         api_key=model.api_key,
+        extra_headers=model.headers or {},  # pyright: ignore[reportArgumentType]
+        extra_body=model.extra_body or {},  # pyright: ignore[reportArgumentType]
     )
 
 
@@ -344,18 +345,12 @@ class ChatAgent(Agent):
 
     async def _generate_llm(self, user_input: str) -> AsyncIterable[str]:
         """Generate response chunks from LLM."""
-        model = get_llm_by_model_id(self._settings.llm_model)
-        if not model:
+        try:
+            llm_client = create_chat_llm(self._settings.llm_model)
+        except ValueError:
             logger.error(f"Unknown model: {self._settings.llm_model}")
             yield f"Error: Unknown model '{self._settings.llm_model}'. Check configuration."
             return
-
-        llm_client = ChatOpenAI(
-            base_url=model.base_url,  # pyright: ignore[reportArgumentType]
-            api_key=model.api_key,  # pyright: ignore[reportArgumentType]
-            model=model.model_id,  # pyright: ignore[reportArgumentType]
-            streaming=True,
-        )
 
         async for chunk in llm_client.astream([("user", user_input)]):
             if chunk.content and isinstance(chunk.content, str):

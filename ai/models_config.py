@@ -2,8 +2,11 @@
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+from langchain_openai import ChatOpenAI
 
 
 @dataclass
@@ -13,6 +16,7 @@ class Provider:
     name: str
     base_url: str | None
     api_key_env: str
+    headers: dict[str, str] | None = None
 
     @property
     def api_key(self) -> str:
@@ -27,6 +31,7 @@ class Model:
     name: str
     provider: str
     model_id: str
+    extra_body: dict[str, Any] | None = None
 
     def get_provider(self) -> Provider:
         """Get the provider for this model."""
@@ -41,6 +46,11 @@ class Model:
     def api_key(self) -> str:
         """Get API key from provider."""
         return self.get_provider().api_key
+
+    @property
+    def headers(self) -> dict[str, str] | None:
+        """Get default headers from provider."""
+        return self.get_provider().headers
 
     @property
     def display_name(self) -> str:
@@ -60,11 +70,13 @@ for name, data in _config["providers"].items():
         name=name,
         base_url=data.get("base_url"),
         api_key_env=data["api_key_env"],
+        headers=data.get("headers"),
     )
 
 # Parse models
 _llm_models: list[Model] = [
-    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"]) for m in _config["llm"]
+    Model(name=m["name"], provider=m["provider"], model_id=m["model_id"], extra_body=m.get("extra_body"))
+    for m in _config["llm"]
 ]
 
 _asr_models: list[Model] = [
@@ -114,3 +126,35 @@ def get_llm_by_model_id(model_id: str) -> Model | None:
         if model.model_id == model_id:
             return model
     return None
+
+
+def create_chat_llm(
+    model_id: str,
+    *,
+    streaming: bool = True,
+    callbacks: list[Any] | None = None,
+) -> ChatOpenAI:
+    """Create a ChatOpenAI client from model_id.
+
+    Single source of truth for ChatOpenAI construction — handles
+    provider headers, extra_body, and all provider-specific config.
+
+    Raises:
+        ValueError: If model_id is not found in models.json
+    """
+    model = get_llm_by_model_id(model_id)
+    if not model:
+        raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
+    kwargs: dict[str, Any] = {}
+    if model.extra_body:
+        kwargs["model_kwargs"] = {"extra_body": model.extra_body}
+    if callbacks:
+        kwargs["callbacks"] = callbacks
+    return ChatOpenAI(
+        base_url=model.base_url,  # pyright: ignore[reportArgumentType]
+        api_key=model.api_key,  # pyright: ignore[reportArgumentType]
+        model=model.model_id,  # pyright: ignore[reportArgumentType]
+        streaming=streaming,
+        default_headers=model.headers or {},
+        **kwargs,
+    )
