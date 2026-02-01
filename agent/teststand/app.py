@@ -11,7 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static
 
-from agent.task_agent import AgentResponse, TaskAgent
+from agent.task.task_agent import AgentResponse, TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 

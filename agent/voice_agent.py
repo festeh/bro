@@ -38,7 +38,7 @@ from agent.constants import (
     TOPIC_VAD_STATUS,
 )
 from agent.result import Err, Ok, Result
-from agent.task_agent import TaskAgent
+from agent.task.task_agent import TaskAgent
 from ai.graph import classify_intent
 from ai.models import Intent
 from ai.models_config import create_chat_llm, get_default_llm, get_llm_by_model_id

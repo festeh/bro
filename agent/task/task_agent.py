@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from agent.constants import MAX_CLI_RETRIES
-from agent.dimaist_cli import DimaistCLI
+from agent.task.dimaist_cli import DimaistCLI
 from agent.result import Err, Ok, Result
 from ai.llm_logging import get_llm_callbacks
 from ai.models_config import create_chat_llm, get_llm_by_model_id
