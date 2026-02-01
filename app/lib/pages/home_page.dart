@@ -767,7 +767,10 @@ class _SettingRow extends StatelessWidget {
 }
 
 /// Available agents that can be enabled/disabled.
-const _availableAgents = [(id: 'task', name: 'Tasks', icon: Icons.task_alt)];
+const _availableAgents = [
+  (id: 'task', name: 'Tasks', icon: Icons.task_alt),
+  (id: 'basidian', name: 'Notes', icon: Icons.note_alt),
+];
 
 class _AgentTile extends StatelessWidget {
   final String name;

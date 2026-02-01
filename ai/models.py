@@ -12,6 +12,7 @@ class Intent(StrEnum):
     WEB_SEARCH = "web_search"
     END_DIALOG = "end_dialog"
     TASK_MANAGEMENT = "task_management"
+    NOTES = "notes"
 
 
 class IntentClassification(BaseModel):
@@ -20,7 +21,8 @@ class IntentClassification(BaseModel):
     intent: Intent = Field(
         description="The classified intent: direct_response for general conversation/knowledge, "
         "web_search for queries requiring current information, end_dialog for farewells, "
-        "task_management for creating/querying/completing tasks"
+        "task_management for creating/querying/completing tasks, "
+        "notes for creating/searching/reading/organizing notes and files in the knowledge base"
     )
     confidence: float = Field(
         ge=0.0,

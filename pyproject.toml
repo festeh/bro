@@ -30,7 +30,12 @@ dependencies = [
     # Test stand TUI
     "textual>=0.50.0",
     "aiofiles>=24.0.0",
+    # Basidian notes client
+    "basidian-server",
 ]
+
+[tool.uv.sources]
+basidian-server = { path = "../basidian/backend", editable = true }
 
 [dependency-groups]
 dev = [

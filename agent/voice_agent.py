@@ -37,6 +37,7 @@ from agent.constants import (
     TOPIC_TEXT_INPUT,
     TOPIC_VAD_STATUS,
 )
+from agent.notes.basidian_agent import BasidianAgent
 from agent.result import Err, Ok, Result
 from agent.task.task_agent import TaskAgent
 from ai.graph import classify_intent
@@ -124,6 +125,7 @@ class ChatAgent(Agent):
         self._session_warning_sent: bool = False
         self._session_monitor_task: asyncio.Task[None] | None = None
         self._task_agent: TaskAgent | None = None
+        self._basidian_agent: BasidianAgent | None = None
         # Response metadata for current stream
         self._current_intent: str | None = None
         self._current_response_type: str = "llm_response"
@@ -255,12 +257,18 @@ class ChatAgent(Agent):
         """Process user input. Returns Ok(response) or Ok(None) for default LLM, Err on failure."""
 
         task_agent_enabled = "task" not in self._settings.excluded_agents
+        basidian_agent_enabled = "basidian" not in self._settings.excluded_agents
 
-        # Active task agent gets all messages (if still enabled)
+        # Active agents get all messages (if still enabled)
         if self._task_agent and self._task_agent.is_active and task_agent_enabled:
             self._current_intent = Intent.TASK_MANAGEMENT
             self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
+
+        if self._basidian_agent and self._basidian_agent.is_active and basidian_agent_enabled:
+            self._current_intent = Intent.NOTES
+            self._current_response_type = "notes_response"
+            return await self._route_to_basidian_agent(text)
 
         # Classify intent
         try:
@@ -285,6 +293,11 @@ class ChatAgent(Agent):
         if classification.intent == Intent.TASK_MANAGEMENT and task_agent_enabled:
             self._current_response_type = "task_response"
             return await self._route_to_task_agent(text)
+
+        # Route notes to basidian agent (if enabled)
+        if classification.intent == Intent.NOTES and basidian_agent_enabled:
+            self._current_response_type = "notes_response"
+            return await self._route_to_basidian_agent(text)
 
         # Default LLM flow
         return Ok(None)
@@ -312,6 +325,31 @@ class ChatAgent(Agent):
         if response.should_exit:
             logger.info(f"TaskAgent exiting: {response.exit_reason}")
             self._task_agent = None
+
+        return Ok(response.text)
+
+    async def _route_to_basidian_agent(self, text: str) -> Result[str | None]:
+        """Route message to basidian notes agent."""
+        if not self._basidian_agent:
+            self._basidian_agent = BasidianAgent(
+                session_id=self._session_id,
+                model_id=self._settings.llm_model,
+            )
+            logger.info("Created BasidianAgent")
+
+        self._basidian_agent.activate()
+
+        try:
+            response = await self._basidian_agent.process_message(text)
+        except Exception as e:
+            logger.error(f"BasidianAgent failed: {e}", exc_info=True)
+            return Err("Sorry, I couldn't process that notes request.")
+
+        logger.info(f"BasidianAgent response: {response.text[:100]}...")
+
+        if response.should_exit:
+            logger.info(f"BasidianAgent exiting: {response.exit_reason}")
+            self._basidian_agent = None
 
         return Ok(response.text)
 
