@@ -404,6 +404,68 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMobileLayout() {
     return Scaffold(
       appBar: AppBar(
+        leading: PopupMenuButton<AppMode>(
+          icon: Icon(
+            _currentMode == AppMode.chat ? Icons.chat_bubble : Icons.mic,
+            color: AppTokens.textPrimary,
+            size: 22,
+          ),
+          tooltip: 'Navigate',
+          color: AppTokens.backgroundSecondary,
+          onSelected: _onModeChanged,
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: AppMode.chat,
+              child: Row(
+                children: [
+                  Icon(
+                    _currentMode == AppMode.chat
+                        ? Icons.chat_bubble
+                        : Icons.chat_bubble_outline,
+                    size: 20,
+                    color: _currentMode == AppMode.chat
+                        ? AppTokens.accentPrimary
+                        : AppTokens.textSecondary,
+                  ),
+                  const SizedBox(width: AppTokens.spacingSm),
+                  Text(
+                    'Chat',
+                    style: TextStyle(
+                      color: _currentMode == AppMode.chat
+                          ? AppTokens.accentPrimary
+                          : AppTokens.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: AppMode.recordings,
+              child: Row(
+                children: [
+                  Icon(
+                    _currentMode == AppMode.recordings
+                        ? Icons.mic
+                        : Icons.mic_none,
+                    size: 20,
+                    color: _currentMode == AppMode.recordings
+                        ? AppTokens.accentPrimary
+                        : AppTokens.textSecondary,
+                  ),
+                  const SizedBox(width: AppTokens.spacingSm),
+                  Text(
+                    'Recordings',
+                    style: TextStyle(
+                      color: _currentMode == AppMode.recordings
+                          ? AppTokens.accentPrimary
+                          : AppTokens.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         title: Text(_currentMode == AppMode.chat ? 'Chat' : 'Recordings'),
         actions: [
           if (_currentMode == AppMode.chat)
@@ -430,24 +492,6 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       body: _buildMainContent(),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentMode == AppMode.chat ? 0 : 1,
-        onDestinationSelected: (index) {
-          _onModeChanged(index == 0 ? AppMode.chat : AppMode.recordings);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Chat',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.mic_none),
-            selectedIcon: Icon(Icons.mic),
-            label: 'Recordings',
-          ),
-        ],
-      ),
     );
   }
 
@@ -507,7 +551,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(bottom: AppTokens.spacingLg),
+          padding: EdgeInsets.only(
+            bottom: AppTokens.spacingLg +
+                MediaQuery.of(context).padding.bottom,
+          ),
           child: RecordButton(
             isRecording: _isRecording,
             isLoading: _isLoading,

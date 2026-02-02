@@ -527,8 +527,14 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: const EdgeInsets.all(AppTokens.spacingMd),
+      padding: EdgeInsets.fromLTRB(
+        AppTokens.spacingMd,
+        AppTokens.spacingMd,
+        AppTokens.spacingMd,
+        AppTokens.spacingMd + bottomPadding,
+      ),
       color: AppTokens.backgroundSecondary,
       child: Row(
         children: [
