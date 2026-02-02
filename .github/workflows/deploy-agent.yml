@@ -87,7 +87,7 @@ jobs:
         run: |
           ssh root@${{ secrets.HOST }} << 'EOF'
           cd /opt/bro
-          export PATH="/root/.local/share/mise/shims:$PATH"
+          export PATH="/root/.local/bin:$PATH"
           uv sync --no-dev
           systemctl restart bro-agent
           sleep 2
