@@ -10,6 +10,9 @@ class TokenService {
     defaultValue: 'secret',
   );
 
+  String get apiKey => _apiKey;
+  bool get isDefault => _apiKey == 'devkey';
+
   /// Generate a JWT token for joining a LiveKit room
   String generateRoomToken({
     required String roomName,

@@ -96,6 +96,7 @@ class LiveKitService {
   int _agentRetryCount = 0;
 
   final TokenService _tokenService;
+  TokenService get tokenService => _tokenService;
   Room? _room;
   LocalAudioTrack? _audioTrack;
   SttProvider _sttProvider = SttProvider.deepgram;
@@ -131,6 +132,7 @@ class LiveKitService {
 
   String? get currentAudioTrackId => _audioTrack?.sid;
   String get roomName => _roomName;
+  String get wsUrl => _wsUrl;
   bool get isConnected => _room?.connectionState == ConnectionState.connected;
   bool get isVoiceSessionActive => _audioTrack != null;
   SttProvider get sttProvider => _sttProvider;

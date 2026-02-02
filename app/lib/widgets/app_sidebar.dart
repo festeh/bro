@@ -19,6 +19,9 @@ class AppSidebar extends StatelessWidget {
   final ValueChanged<Set<String>> onExcludedAgentsChanged;
   final ConnectionStatus connectionStatus;
   final bool isAgentConnected;
+  final String wsUrl;
+  final String roomName;
+  final String apiKey;
 
   const AppSidebar({
     super.key,
@@ -34,6 +37,9 @@ class AppSidebar extends StatelessWidget {
     required this.onExcludedAgentsChanged,
     required this.connectionStatus,
     required this.isAgentConnected,
+    required this.wsUrl,
+    required this.roomName,
+    required this.apiKey,
   });
 
   @override
@@ -103,9 +109,12 @@ class AppSidebar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          _ConnectionDot(
+          _ConnectionInfo(
             connectionStatus: connectionStatus,
             isAgentConnected: isAgentConnected,
+            wsUrl: wsUrl,
+            roomName: roomName,
+            apiKey: apiKey,
           ),
           const SizedBox(height: AppTokens.spacingLg),
         ],
@@ -394,50 +403,142 @@ class _AgentRow extends StatelessWidget {
   }
 }
 
-class _ConnectionDot extends StatelessWidget {
+class _ConnectionInfo extends StatelessWidget {
   final ConnectionStatus connectionStatus;
   final bool isAgentConnected;
+  final String wsUrl;
+  final String roomName;
+  final String apiKey;
 
-  const _ConnectionDot({
+  const _ConnectionInfo({
     required this.connectionStatus,
     required this.isAgentConnected,
+    required this.wsUrl,
+    required this.roomName,
+    required this.apiKey,
   });
 
   @override
   Widget build(BuildContext context) {
     Color color;
-    String tooltip;
+    String statusText;
 
     if (connectionStatus != ConnectionStatus.connected) {
       switch (connectionStatus) {
         case ConnectionStatus.connecting:
           color = AppTokens.accentPrimary;
-          tooltip = 'Connecting to server...';
+          statusText = 'Connecting...';
           break;
         case ConnectionStatus.error:
           color = AppTokens.accentRecording;
-          tooltip = 'Connection error';
+          statusText = 'Error';
           break;
         case ConnectionStatus.disconnected:
         case ConnectionStatus.connected:
           color = AppTokens.textTertiary;
-          tooltip = 'Disconnected';
+          statusText = 'Disconnected';
           break;
       }
     } else if (!isAgentConnected) {
       color = AppTokens.accentPrimary;
-      tooltip = 'Waiting for agent...';
+      statusText = 'No agent';
     } else {
       color = AppTokens.accentSuccess;
-      tooltip = 'Agent connected';
+      statusText = 'Connected';
     }
 
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    return GestureDetector(
+      onTap: () => _showInfoDialog(context, statusText),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: AppTokens.spacingSm),
+          Icon(
+            Icons.info_outline,
+            size: 14,
+            color: AppTokens.textTertiary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(BuildContext context, String statusText) {
+    final isDefault = apiKey == 'devkey';
+    final maskedKey = apiKey.length > 8
+        ? '${apiKey.substring(0, 8)}...'
+        : apiKey;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTokens.backgroundSecondary,
+        title: const Text(
+          'Connection Info',
+          style: TextStyle(color: AppTokens.textPrimary, fontSize: AppTokens.fontSizeMd),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _infoRow('Status', statusText),
+            _infoRow('Server', wsUrl),
+            _infoRow('Room', roomName),
+            _infoRow('API Key', maskedKey),
+            if (isDefault)
+              const Padding(
+                padding: EdgeInsets.only(top: AppTokens.spacingSm),
+                child: Text(
+                  'Using default dev credentials',
+                  style: TextStyle(
+                    color: AppTokens.accentRecording,
+                    fontSize: AppTokens.fontSizeXs,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppTokens.spacingXs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 60,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTokens.textTertiary,
+                fontSize: AppTokens.fontSizeXs,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppTokens.textPrimary,
+                fontSize: AppTokens.fontSizeXs,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
