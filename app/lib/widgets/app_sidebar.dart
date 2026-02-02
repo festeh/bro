@@ -17,6 +17,8 @@ class AppSidebar extends StatelessWidget {
   final ValueChanged<bool> onTtsEnabledChanged;
   final Set<String> excludedAgents;
   final ValueChanged<Set<String>> onExcludedAgentsChanged;
+  final ConnectionStatus connectionStatus;
+  final bool isAgentConnected;
 
   const AppSidebar({
     super.key,
@@ -30,6 +32,8 @@ class AppSidebar extends StatelessWidget {
     required this.onTtsEnabledChanged,
     required this.excludedAgents,
     required this.onExcludedAgentsChanged,
+    required this.connectionStatus,
+    required this.isAgentConnected,
   });
 
   @override
@@ -99,6 +103,11 @@ class AppSidebar extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          _ConnectionDot(
+            connectionStatus: connectionStatus,
+            isAgentConnected: isAgentConnected,
+          ),
+          const SizedBox(height: AppTokens.spacingLg),
         ],
       ),
     );
@@ -380,6 +389,55 @@ class _AgentRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ConnectionDot extends StatelessWidget {
+  final ConnectionStatus connectionStatus;
+  final bool isAgentConnected;
+
+  const _ConnectionDot({
+    required this.connectionStatus,
+    required this.isAgentConnected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    String tooltip;
+
+    if (connectionStatus != ConnectionStatus.connected) {
+      switch (connectionStatus) {
+        case ConnectionStatus.connecting:
+          color = AppTokens.accentPrimary;
+          tooltip = 'Connecting to server...';
+          break;
+        case ConnectionStatus.error:
+          color = AppTokens.accentRecording;
+          tooltip = 'Connection error';
+          break;
+        case ConnectionStatus.disconnected:
+        case ConnectionStatus.connected:
+          color = AppTokens.textTertiary;
+          tooltip = 'Disconnected';
+          break;
+      }
+    } else if (!isAgentConnected) {
+      color = AppTokens.accentPrimary;
+      tooltip = 'Waiting for agent...';
+    } else {
+      color = AppTokens.accentSuccess;
+      tooltip = 'Agent connected';
+    }
+
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
   }

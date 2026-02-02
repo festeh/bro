@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI
 
 from basidian.client import BasidianClient
+from basidian.plugins.daily_notes import DailyNotes
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
@@ -43,6 +44,7 @@ class Operation(StrEnum):
     GET_TREE = "get_tree"
     READ_FILE = "read_file"
     RECENT = "recent"
+    TODAY_NOTE = "today_note"
     CREATE_FILE = "create_file"
     UPDATE_FILE = "update_file"
     DELETE_FILE = "delete_file"
@@ -125,6 +127,7 @@ READ OPERATIONS (action="query"):
 - get_tree: Show the full file/folder tree. No args needed.
 - read_file: Read a file's content. Args: {{path: "/folder/file.txt"}}
 - recent: List recently modified files. Args: {{limit: 10}} (optional, default 10)
+- today_note: Open or create today's daily note. No args needed.
 
 WRITE OPERATIONS (action="write"):
 - create_file: Create a new file or folder. Args: {{path: "/folder/file.txt", content: "text", type: "file"}} (type defaults to "file", use "folder" for folders)
@@ -274,6 +277,11 @@ class BasidianAgent:
                 if not node:
                     return {"error": f"File not found: {args['path']}"}
                 return {"path": node.path, "content": node.content, "type": node.type}
+
+            case Operation.TODAY_NOTE:
+                daily = DailyNotes(client)
+                node = await daily.get_or_create_today()
+                return {"path": node.path, "content": node.content}
 
             case Operation.RECENT:
                 nodes = await client.get_tree()

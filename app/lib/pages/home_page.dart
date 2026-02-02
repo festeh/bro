@@ -389,6 +389,8 @@ class _HomePageState extends State<HomePage> {
             onTtsEnabledChanged: _onTtsEnabledChanged,
             excludedAgents: _excludedAgents,
             onExcludedAgentsChanged: _onExcludedAgentsChanged,
+            connectionStatus: _connectionStatus,
+            isAgentConnected: _isAgentConnected,
           ),
           Expanded(child: _buildMainContent()),
         ],

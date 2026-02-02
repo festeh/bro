@@ -108,12 +108,20 @@ app-device: sync-models
 app-build-linux: sync-models
     cd app && flutter build linux
 
-# Build Android APK (release)
+# Build Android APK (release, localhost)
 app-build-android: sync-models
     cd app && flutter build apk --flavor phone
 
+# Build Android APK for production (requires BRO_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env)
+app-build-android-prod: sync-models
+    cd app && flutter build apk --flavor phone \
+        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
+        --dart-define=LIVEKIT_HTTP_URL=https://$BRO_HOST \
+        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
+
 # Build and deploy phone APK to pCloud
-deploy-phone: app-build-android
+deploy-phone: app-build-android-prod
     cp app/build/app/outputs/flutter-apk/app-phone-release.apk ~/pCloudDrive/android-apps/bro/
 
 # ─────────────────────────────────────────────────────────────

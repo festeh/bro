@@ -1,0 +1,95 @@
+name: Deploy Voice Agent
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'agent/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+  workflow_dispatch:
+
+env:
+  DEPLOY_PATH: /opt/bro
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy code to server
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.venv' \
+            --exclude='app/' \
+            --exclude='wear/' \
+            --exclude='ai/frontend/node_modules' \
+            --exclude='recordings/' \
+            -e ssh \
+            ./ root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/
+
+      - name: Deploy environment file
+        env:
+          LIVEKIT_URL: ws://localhost:7880
+          LIVEKIT_API_KEY: ${{ secrets.BRO_LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.BRO_LIVEKIT_API_SECRET }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          ELEVEN_API_KEY: ${{ secrets.ELEVEN_API_KEY }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          KIMI_ENDPOINT: ${{ secrets.KIMI_ENDPOINT }}
+          KIMI_TOKEN: ${{ secrets.KIMI_TOKEN }}
+          OPENROUTER_ENDPOINT: https://openrouter.ai/api/v1/chat/completions
+          OPENROUTER_TOKEN: ${{ secrets.OPENROUTER_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ASR_URL: ${{ secrets.ASR_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_AI_TOKEN: ${{ secrets.GOOGLE_AI_TOKEN }}
+          GROQ_TOKEN: ${{ secrets.GROQ_TOKEN }}
+          BASIDIAN_URL: ${{ secrets.BASIDIAN_URL }}
+        run: |
+          cat > .env << 'ENVEOF'
+          LIVEKIT_URL=${{ env.LIVEKIT_URL }}
+          LIVEKIT_API_KEY=${{ env.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET=${{ env.LIVEKIT_API_SECRET }}
+          DEEPGRAM_API_KEY=${{ env.DEEPGRAM_API_KEY }}
+          ELEVEN_API_KEY=${{ env.ELEVEN_API_KEY }}
+          KIMI_API_KEY=${{ env.KIMI_API_KEY }}
+          KIMI_ENDPOINT=${{ env.KIMI_ENDPOINT }}
+          KIMI_TOKEN=${{ env.KIMI_TOKEN }}
+          OPENROUTER_ENDPOINT=${{ env.OPENROUTER_ENDPOINT }}
+          OPENROUTER_TOKEN=${{ env.OPENROUTER_TOKEN }}
+          DATABASE_URL=${{ env.DATABASE_URL }}
+          ASR_URL=${{ env.ASR_URL }}
+          GOOGLE_CLIENT_ID=${{ env.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ env.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN=${{ env.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_AI_TOKEN=${{ env.GOOGLE_AI_TOKEN }}
+          GROQ_TOKEN=${{ env.GROQ_TOKEN }}
+          BASIDIAN_URL=${{ env.BASIDIAN_URL }}
+          PYTHONPATH=/opt/bro
+          ENVEOF
+          scp .env root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/.env
+          rm .env
+
+      - name: Install dependencies and restart agent
+        run: |
+          ssh root@${{ secrets.HOST }} << 'EOF'
+          cd /opt/bro
+          export PATH="/root/.local/share/mise/shims:$PATH"
+          uv sync --no-dev
+          systemctl restart bro-agent
+          sleep 2
+          systemctl is-active bro-agent
+          EOF

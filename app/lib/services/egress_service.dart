@@ -55,7 +55,11 @@ class EgressInfo {
 }
 
 class EgressService {
-  static const String _baseUrl = 'http://localhost:7880/twirp';
+  static const String _baseUrl = String.fromEnvironment(
+    'LIVEKIT_HTTP_URL',
+    defaultValue: 'http://localhost:7880',
+  );
+  String get _twirpUrl => '$_baseUrl/twirp';
   final TokenService _tokenService;
   String? _cachedToken;
 
@@ -79,7 +83,7 @@ class EgressService {
     required String filepath,
   }) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/livekit.Egress/StartTrackEgress'),
+      Uri.parse('$_twirpUrl/livekit.Egress/StartTrackEgress'),
       headers: _headers,
       body: jsonEncode({
         'room_name': roomName,
@@ -98,7 +102,7 @@ class EgressService {
   /// Stop an active egress
   Future<EgressInfo> stopEgress(String egressId) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/livekit.Egress/StopEgress'),
+      Uri.parse('$_twirpUrl/livekit.Egress/StopEgress'),
       headers: _headers,
       body: jsonEncode({'egress_id': egressId}),
     );
@@ -118,7 +122,7 @@ class EgressService {
     }
 
     final response = await http.post(
-      Uri.parse('$_baseUrl/livekit.Egress/ListEgress'),
+      Uri.parse('$_twirpUrl/livekit.Egress/ListEgress'),
       headers: _headers,
       body: jsonEncode(body),
     );

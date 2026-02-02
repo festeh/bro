@@ -1,8 +1,14 @@
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class TokenService {
-  static const String _apiKey = 'devkey';
-  static const String _apiSecret = 'secret';
+  static const String _apiKey = String.fromEnvironment(
+    'LIVEKIT_API_KEY',
+    defaultValue: 'devkey',
+  );
+  static const String _apiSecret = String.fromEnvironment(
+    'LIVEKIT_API_SECRET',
+    defaultValue: 'secret',
+  );
 
   /// Generate a JWT token for joining a LiveKit room
   String generateRoomToken({
