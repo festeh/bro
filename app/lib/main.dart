@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
@@ -16,8 +17,23 @@ import 'services/storage_service.dart';
 import 'services/token_service.dart';
 import 'theme/theme.dart';
 
+const String _livekitUrl = String.fromEnvironment(
+  'LIVEKIT_URL',
+  defaultValue: 'ws://localhost:7880',
+);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Suppress flutter_webrtc "No active stream to cancel" PlatformException.
+  // This is thrown asynchronously during Room.disconnect() cleanup and is harmless.
+  FlutterError.onError = (details) {
+    if (details.exception is PlatformException &&
+        (details.exception as PlatformException).message == 'No active stream to cancel') {
+      return;
+    }
+    FlutterError.presentError(details);
+  };
 
   // Set up logging
   hierarchicalLoggingEnabled = true;
@@ -45,14 +61,19 @@ void main() async {
   final recordingsDir = await _getRecordingsDir();
 
   // Initialize services
+  final settingsService = SettingsService();
+  await settingsService.init();
+
   final tokenService = TokenService();
-  final liveKitService = LiveKitService(tokenService: tokenService);
+  final liveKitService = LiveKitService(
+    tokenService: tokenService,
+    wsUrl: _livekitUrl,
+    deviceId: settingsService.deviceId,
+  );
   final egressService = EgressService(tokenService: tokenService);
   final storageService = StorageService(recordingsDir: recordingsDir);
-  final settingsService = SettingsService();
 
   await storageService.init();
-  await settingsService.init();
 
   runApp(
     BroApp(

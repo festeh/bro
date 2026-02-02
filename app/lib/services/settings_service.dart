@@ -1,10 +1,12 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/models_config.dart';
 import 'livekit_service.dart';
 
 /// Persists user settings using SharedPreferences.
 class SettingsService {
+  static const String _keyDeviceId = 'deviceId';
   static const String _keySttProvider = 'sttProvider';
   static const String _keyLlmModelId = 'llmModelId';
   static const String _keyTtsEnabled = 'ttsEnabled';
@@ -14,7 +16,14 @@ class SettingsService {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Generate and persist device ID on first launch
+    if (_prefs.getString(_keyDeviceId) == null) {
+      await _prefs.setString(_keyDeviceId, const Uuid().v4().substring(0, 8));
+    }
   }
+
+  // Device ID (persistent, generated once)
+  String get deviceId => _prefs.getString(_keyDeviceId)!;
 
   // STT Provider
   SttProvider get sttProvider {

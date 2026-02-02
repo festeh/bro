@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:logging/logging.dart';
-import 'package:uuid/uuid.dart';
 
 import '../constants/livekit_constants.dart';
 import '../models/models_config.dart';
@@ -86,10 +86,14 @@ class SessionNotificationEvent {
 class LiveKitService {
   static const String _defaultWsUrl = 'ws://localhost:7880';
   static const String _defaultIdentity = 'desktop-user';
+  static const Duration _agentTimeout = Duration(seconds: 3);
+  static const int _maxAgentRetries = 5;
 
   final String _wsUrl;
   final String _identity;
-  late final String _roomName;
+  final String _roomName;
+  Timer? _agentWatchdog;
+  int _agentRetryCount = 0;
 
   final TokenService _tokenService;
   Room? _room;
@@ -136,11 +140,15 @@ class LiveKitService {
   TaskAgentProvider get taskAgentProvider => _taskAgentProvider;
   Set<String> get excludedAgents => _excludedAgents;
 
-  LiveKitService({TokenService? tokenService, String? wsUrl, String? identity})
-    : _tokenService = tokenService ?? TokenService(),
-      _wsUrl = wsUrl ?? _defaultWsUrl,
-      _identity = identity ?? _defaultIdentity,
-      _roomName = 'bro-${const Uuid().v4().substring(0, 8)}' {
+  LiveKitService({
+    TokenService? tokenService,
+    String? wsUrl,
+    String? identity,
+    required String deviceId,
+  })  : _tokenService = tokenService ?? TokenService(),
+        _wsUrl = wsUrl ?? _defaultWsUrl,
+        _identity = identity ?? _defaultIdentity,
+        _roomName = 'bro-$deviceId' {
     _llmModel = ModelsConfig.instance.defaultLlm;
     _log.info(
       'Created session with room: $_roomName, url: $_wsUrl, identity: $_identity',
@@ -176,6 +184,8 @@ class LiveKitService {
           _log.info('Agent connected: ${event.participant.identity}');
           _isAgentConnected = true;
           _agentConnectedController.add(true);
+          _agentWatchdog?.cancel();
+          _agentRetryCount = 0;
         }
       });
       _room!.events.on<ParticipantDisconnectedEvent>((event) {
@@ -196,6 +206,11 @@ class LiveKitService {
           _agentConnectedController.add(true);
           break;
         }
+      }
+
+      // Start watchdog: if no agent after timeout, reconnect to trigger fresh dispatch
+      if (!_isAgentConnected) {
+        _startAgentWatchdog();
       }
 
       // Register transcription handlers
@@ -222,7 +237,39 @@ class LiveKitService {
     }
   }
 
+  void _startAgentWatchdog() {
+    _agentWatchdog?.cancel();
+    _agentWatchdog = Timer(_agentTimeout, () async {
+      if (_isAgentConnected) return;
+      _agentRetryCount++;
+      if (_agentRetryCount > _maxAgentRetries) {
+        _log.warning('Agent not found after $_maxAgentRetries retries, giving up');
+        return;
+      }
+      _log.info('Agent not found after $_agentTimeout, reconnecting (attempt $_agentRetryCount/$_maxAgentRetries)...');
+      await _reconnect();
+    });
+  }
+
+  Future<void> _reconnect() async {
+    // Full teardown (same as disconnect but without status emissions)
+    _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
+    _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
+    _room?.unregisterTextStreamHandler(LiveKitTopics.vadStatus);
+    try {
+      await _room?.disconnect();
+    } on PlatformException {
+      // flutter_webrtc throws "No active stream to cancel" when cleaning up
+      // peer connections that were short-lived or had no tracks — harmless.
+    }
+    _room?.removeListener(_onRoomEvent);
+    _room = null;
+    // Reconnect triggers a new room creation on the server → fresh agent dispatch
+    await connect();
+  }
+
   Future<void> disconnect() async {
+    _agentWatchdog?.cancel();
     await stopVoiceSession();
     _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
     _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
