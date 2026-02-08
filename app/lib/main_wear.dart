@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
+import 'models/models_config.dart';
 import 'pages/wear_voice_page.dart';
 import 'services/livekit_service.dart';
 import 'services/token_service.dart';
@@ -22,12 +25,24 @@ void main() async {
     print('${record.level.name}: ${record.loggerName}: ${record.message}');
   });
 
+  // Generate persistent device ID
+  final prefs = await SharedPreferences.getInstance();
+  var deviceId = prefs.getString('deviceId');
+  if (deviceId == null) {
+    deviceId = const Uuid().v4().substring(0, 8);
+    await prefs.setString('deviceId', deviceId);
+  }
+
+  // Load model configuration
+  await ModelsConfig.load();
+
   // Initialize services
   final tokenService = TokenService();
   final liveKitService = LiveKitService(
     tokenService: tokenService,
     wsUrl: _livekitUrl,
     identity: 'wear-user',
+    deviceId: deviceId,
   );
 
   runApp(WearVoiceApp(liveKitService: liveKitService));

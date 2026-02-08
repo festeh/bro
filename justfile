@@ -37,17 +37,17 @@ devices:
 # ─────────────────────────────────────────────────────────────
 
 # Run wear app on emulator (finds first emulator device)
-wear:
+wear: sync-models
     #!/usr/bin/env bash
     device=$(adb devices | grep emulator | head -1 | cut -f1)
     if [ -z "$device" ]; then
         echo "No emulator found. Run 'just emu-wear' first."
         exit 1
     fi
-    cd wear && flutter run -d "$device"
+    cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device"
 
 # Run wear app on real Samsung watch (SM-* device)
-wear-device:
+wear-device: sync-models
     #!/usr/bin/env bash
     device=$(flutter devices 2>/dev/null | grep "SM " | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
     if [ -z "$device" ]; then
@@ -55,11 +55,17 @@ wear-device:
         exit 1
     fi
     echo "Running on device: $device"
-    cd wear && flutter run -d "$device"
+    cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device" \
+        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
+        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
 
-# Build wear debug APK
-wear-build:
-    cd wear && flutter build apk --debug
+# Build wear release APK
+wear-build: sync-models
+    cd app && flutter build apk --flavor wear -t lib/main_wear.dart \
+        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
+        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
 
 # View wear logs
 wear-logs:
@@ -79,9 +85,12 @@ sync-models:
 clean-app:
     cd app && flutter clean
 
-# Run app on Linux desktop
+# Run app on Linux desktop (connects to remote server)
 app: sync-models
-    cd app && flutter run -d linux
+    cd app && flutter run -d linux \
+        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
+        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
 
 # Run app on Android emulator
 app-android: sync-models

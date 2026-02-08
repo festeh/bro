@@ -7,6 +7,7 @@ on:
       - 'agent/**'
       - 'pyproject.toml'
       - 'uv.lock'
+      - 'livekit.yaml'
   workflow_dispatch:
 
 env:
@@ -62,14 +63,24 @@ jobs:
           scp .env root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/.env
           rm .env
 
-      - name: Install dependencies and restart agent
+      - name: Render LiveKit config
+        run: |
+          export LIVEKIT_API_KEY="${{ secrets.BRO_LIVEKIT_API_KEY }}"
+          export LIVEKIT_API_SECRET="${{ secrets.BRO_LIVEKIT_API_SECRET }}"
+          envsubst '${LIVEKIT_API_KEY} ${LIVEKIT_API_SECRET}' < livekit.yaml > livekit-rendered.yaml
+          scp livekit-rendered.yaml root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/livekit.yaml
+          rm livekit-rendered.yaml
+
+      - name: Install dependencies and restart services
         run: |
           ssh root@${{ secrets.HOST }} << 'EOF'
           cd /opt/bro
           export PATH="/root/.local/bin:$PATH"
           uv sync --no-dev
           PYTHONPATH=/opt/bro uv run python agent/voice_agent.py download-files
+          systemctl restart bro-livekit
           systemctl restart bro-agent
           sleep 3
+          systemctl is-active bro-livekit
           systemctl is-active bro-agent
           EOF
