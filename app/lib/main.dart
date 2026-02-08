@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +11,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'models/models_config.dart';
 import 'pages/home_page.dart';
+import 'providers/settings_provider.dart';
 import 'services/egress_service.dart';
 import 'services/livekit_service.dart';
 import 'services/settings_service.dart';
@@ -76,11 +78,16 @@ void main() async {
   await storageService.init();
 
   runApp(
-    BroApp(
-      liveKitService: liveKitService,
-      egressService: egressService,
-      storageService: storageService,
-      settingsService: settingsService,
+    ProviderScope(
+      overrides: [
+        settingsServiceProvider.overrideWithValue(settingsService),
+        liveKitServiceProvider.overrideWithValue(liveKitService),
+      ],
+      child: BroApp(
+        liveKitService: liveKitService,
+        egressService: egressService,
+        storageService: storageService,
+      ),
     ),
   );
 }
@@ -108,14 +115,12 @@ class BroApp extends StatefulWidget {
   final LiveKitService liveKitService;
   final EgressService egressService;
   final StorageService storageService;
-  final SettingsService settingsService;
 
   const BroApp({
     super.key,
     required this.liveKitService,
     required this.egressService,
     required this.storageService,
-    required this.settingsService,
   });
 
   @override
@@ -140,7 +145,6 @@ class _BroAppState extends State<BroApp> {
         liveKitService: widget.liveKitService,
         egressService: widget.egressService,
         storageService: widget.storageService,
-        settingsService: widget.settingsService,
         recordingsDir: widget.storageService.recordingsDir,
       ),
     );

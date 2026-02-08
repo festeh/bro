@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
@@ -8,9 +9,9 @@ import 'package:uuid/uuid.dart';
 
 import '../models/models_config.dart';
 import '../models/recording.dart';
+import '../providers/settings_provider.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
-import '../services/settings_service.dart';
 import '../services/storage_service.dart';
 import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
@@ -23,11 +24,10 @@ import 'chat_page.dart';
 
 final _log = Logger('HomePage');
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   final LiveKitService liveKitService;
   final EgressService egressService;
   final StorageService storageService;
-  final SettingsService settingsService;
   final String recordingsDir;
 
   const HomePage({
@@ -35,15 +35,14 @@ class HomePage extends StatefulWidget {
     required this.liveKitService,
     required this.egressService,
     required this.storageService,
-    required this.settingsService,
     required this.recordingsDir,
   });
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   late final Player _player;
   final _uuid = const Uuid();
   final _waveformService = WaveformService();
@@ -53,10 +52,6 @@ class _HomePageState extends State<HomePage> {
   List<Recording> _recordings = [];
   ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
   bool _isAgentConnected = false;
-  SttProvider _sttProvider = SttProvider.deepgram;
-  late Model _llmModel;
-  bool _ttsEnabled = true;
-  Set<String> _excludedAgents = {};
   bool _isRecording = false;
   bool _isLoading = false;
   String? _currentEgressId;
@@ -77,16 +72,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Load persisted settings
-    _sttProvider = widget.settingsService.sttProvider;
-    _llmModel = widget.settingsService.llmModel;
-    _ttsEnabled = widget.settingsService.ttsEnabled;
-    _excludedAgents = widget.settingsService.excludedAgents;
-    // Apply to LiveKitService (will be sent on connect)
-    widget.liveKitService.setSttProvider(_sttProvider);
-    widget.liveKitService.setLlmModel(_llmModel);
-    widget.liveKitService.setTtsEnabled(_ttsEnabled);
-    widget.liveKitService.setExcludedAgents(_excludedAgents);
     _player = Player();
     _init();
   }
@@ -329,30 +314,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void _onSttProviderChanged(SttProvider provider) {
-    setState(() => _sttProvider = provider);
-    widget.liveKitService.setSttProvider(provider);
-    widget.settingsService.setSttProvider(provider);
-  }
-
-  void _onLlmModelChanged(Model model) {
-    setState(() => _llmModel = model);
-    widget.liveKitService.setLlmModel(model);
-    widget.settingsService.setLlmModel(model);
-  }
-
-  void _onTtsEnabledChanged(bool enabled) {
-    setState(() => _ttsEnabled = enabled);
-    widget.liveKitService.setTtsEnabled(enabled);
-    widget.settingsService.setTtsEnabled(enabled);
-  }
-
-  void _onExcludedAgentsChanged(Set<String> excluded) {
-    setState(() => _excludedAgents = excluded);
-    widget.liveKitService.setExcludedAgents(excluded);
-    widget.settingsService.setExcludedAgents(excluded);
-  }
-
   void _onModeChanged(AppMode mode) {
     setState(() => _currentMode = mode);
     // Update agent mode based on app mode
@@ -381,14 +342,6 @@ class _HomePageState extends State<HomePage> {
           AppSidebar(
             currentMode: _currentMode,
             onModeChanged: _onModeChanged,
-            sttProvider: _sttProvider,
-            onSttProviderChanged: _onSttProviderChanged,
-            llmModel: _llmModel,
-            onLlmModelChanged: _onLlmModelChanged,
-            ttsEnabled: _ttsEnabled,
-            onTtsEnabledChanged: _onTtsEnabledChanged,
-            excludedAgents: _excludedAgents,
-            onExcludedAgentsChanged: _onExcludedAgentsChanged,
             connectionStatus: _connectionStatus,
             isAgentConnected: _isAgentConnected,
             wsUrl: widget.liveKitService.wsUrl,
@@ -508,22 +461,7 @@ class _HomePageState extends State<HomePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => _SettingsSheet(
-        sttProvider: _sttProvider,
-        onSttProviderChanged: (provider) {
-          _onSttProviderChanged(provider);
-          Navigator.pop(context);
-        },
-        llmModel: _llmModel,
-        onLlmModelChanged: (model) {
-          _onLlmModelChanged(model);
-          Navigator.pop(context);
-        },
-        ttsEnabled: _ttsEnabled,
-        onTtsEnabledChanged: _onTtsEnabledChanged,
-        excludedAgents: _excludedAgents,
-        onExcludedAgentsChanged: _onExcludedAgentsChanged,
-      ),
+      builder: (context) => const _SettingsSheet(),
     );
   }
 
@@ -727,125 +665,119 @@ class _RecordingIndicator extends StatelessWidget {
   }
 }
 
-class _SettingsSheet extends StatelessWidget {
-  final SttProvider sttProvider;
-  final ValueChanged<SttProvider> onSttProviderChanged;
-  final Model llmModel;
-  final ValueChanged<Model> onLlmModelChanged;
-  final bool ttsEnabled;
-  final ValueChanged<bool> onTtsEnabledChanged;
-  final Set<String> excludedAgents;
-  final ValueChanged<Set<String>> onExcludedAgentsChanged;
-
-  const _SettingsSheet({
-    required this.sttProvider,
-    required this.onSttProviderChanged,
-    required this.llmModel,
-    required this.onLlmModelChanged,
-    required this.ttsEnabled,
-    required this.onTtsEnabledChanged,
-    required this.excludedAgents,
-    required this.onExcludedAgentsChanged,
-  });
+class _SettingsSheet extends ConsumerWidget {
+  const _SettingsSheet();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(AppTokens.spacingLg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Settings',
-            style: TextStyle(
-              color: AppTokens.textPrimary,
-              fontSize: AppTokens.fontSizeLg,
-              fontWeight: AppTokens.fontWeightMedium,
-            ),
-          ),
-          const SizedBox(height: AppTokens.spacingLg),
-          _SettingRow(
-            label: 'ASR Provider',
-            child: DropdownButton<SttProvider>(
-              value: sttProvider,
-              dropdownColor: AppTokens.backgroundTertiary,
-              style: const TextStyle(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(AppTokens.spacingLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Settings',
+              style: TextStyle(
                 color: AppTokens.textPrimary,
-                fontSize: AppTokens.fontSizeMd,
+                fontSize: AppTokens.fontSizeLg,
+                fontWeight: AppTokens.fontWeightMedium,
               ),
-              underline: const SizedBox(),
-              items: SttProvider.values.map((provider) {
-                return DropdownMenuItem(
-                  value: provider,
-                  child: Text(_sttProviderLabel(provider)),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) onSttProviderChanged(value);
-              },
             ),
-          ),
-          const SizedBox(height: AppTokens.spacingMd),
-          _SettingRow(
-            label: 'LLM Model',
-            child: DropdownButton<Model>(
-              value: llmModel,
-              dropdownColor: AppTokens.backgroundTertiary,
-              style: const TextStyle(
-                color: AppTokens.textPrimary,
-                fontSize: AppTokens.fontSizeMd,
+            const SizedBox(height: AppTokens.spacingLg),
+            _SettingRow(
+              label: 'ASR Provider',
+              child: DropdownButton<SttProvider>(
+                value: settings.sttProvider,
+                dropdownColor: AppTokens.backgroundTertiary,
+                style: const TextStyle(
+                  color: AppTokens.textPrimary,
+                  fontSize: AppTokens.fontSizeMd,
+                ),
+                underline: const SizedBox(),
+                items: SttProvider.values.map((provider) {
+                  return DropdownMenuItem(
+                    value: provider,
+                    child: Text(_sttProviderLabel(provider)),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    notifier.setSttProvider(value);
+                    Navigator.pop(context);
+                  }
+                },
               ),
-              underline: const SizedBox(),
-              items: ModelsConfig.instance.llmModels.map((model) {
-                return DropdownMenuItem(
-                  value: model,
-                  child: Text(model.displayName),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) onLlmModelChanged(value);
-              },
             ),
-          ),
-          const SizedBox(height: AppTokens.spacingMd),
-          _SettingRow(
-            label: 'Text-to-Speech',
-            child: Switch(
-              value: ttsEnabled,
-              onChanged: onTtsEnabledChanged,
-              activeTrackColor: AppTokens.accentPrimary,
+            const SizedBox(height: AppTokens.spacingMd),
+            _SettingRow(
+              label: 'LLM Model',
+              child: DropdownButton<Model>(
+                value: settings.llmModel,
+                dropdownColor: AppTokens.backgroundTertiary,
+                style: const TextStyle(
+                  color: AppTokens.textPrimary,
+                  fontSize: AppTokens.fontSizeMd,
+                ),
+                underline: const SizedBox(),
+                items: ModelsConfig.instance.llmModels.map((model) {
+                  return DropdownMenuItem(
+                    value: model,
+                    child: Text(model.displayName),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    notifier.setLlmModel(value);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: AppTokens.spacingLg),
-          const Text(
-            'Agents',
-            style: TextStyle(
-              color: AppTokens.textSecondary,
-              fontSize: AppTokens.fontSizeMd,
-              fontWeight: AppTokens.fontWeightMedium,
+            const SizedBox(height: AppTokens.spacingMd),
+            _SettingRow(
+              label: 'Text-to-Speech',
+              child: Switch(
+                value: settings.ttsEnabled,
+                onChanged: notifier.setTtsEnabled,
+                activeTrackColor: AppTokens.accentPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: AppTokens.spacingSm),
-          ..._availableAgents.map((agent) {
-            final isEnabled = !excludedAgents.contains(agent.id);
-            return _AgentTile(
-              name: agent.name,
-              icon: agent.icon,
-              isEnabled: isEnabled,
-              onChanged: (enabled) {
-                final newExcluded = Set<String>.from(excludedAgents);
-                if (enabled) {
-                  newExcluded.remove(agent.id);
-                } else {
-                  newExcluded.add(agent.id);
-                }
-                onExcludedAgentsChanged(newExcluded);
-              },
-            );
-          }),
-          const SizedBox(height: AppTokens.spacingMd),
-        ],
+            const SizedBox(height: AppTokens.spacingLg),
+            const Text(
+              'Agents',
+              style: TextStyle(
+                color: AppTokens.textSecondary,
+                fontSize: AppTokens.fontSizeMd,
+                fontWeight: AppTokens.fontWeightMedium,
+              ),
+            ),
+            const SizedBox(height: AppTokens.spacingSm),
+            ..._availableAgents.map((agent) {
+              final isEnabled = !settings.excludedAgents.contains(agent.id);
+              return _AgentTile(
+                name: agent.name,
+                icon: agent.icon,
+                isEnabled: isEnabled,
+                onChanged: (enabled) {
+                  final newExcluded = Set<String>.from(settings.excludedAgents);
+                  if (enabled) {
+                    newExcluded.remove(agent.id);
+                  } else {
+                    newExcluded.add(agent.id);
+                  }
+                  notifier.setExcludedAgents(newExcluded);
+                },
+              );
+            }),
+            const SizedBox(height: AppTokens.spacingMd),
+          ],
+        ),
       ),
     );
   }

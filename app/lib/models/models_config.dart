@@ -6,15 +6,15 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
 /// Provider configuration.
-class Provider {
+class ModelProvider {
   final String name;
   final String? baseUrl;
   final String apiKeyEnv;
 
-  const Provider({required this.name, this.baseUrl, required this.apiKeyEnv});
+  const ModelProvider({required this.name, this.baseUrl, required this.apiKeyEnv});
 
-  factory Provider.fromJson(String name, Map<String, dynamic> json) {
-    return Provider(
+  factory ModelProvider.fromJson(String name, Map<String, dynamic> json) {
+    return ModelProvider(
       name: name,
       baseUrl: json['base_url'] as String?,
       apiKeyEnv: json['api_key_env'] as String,
@@ -50,7 +50,7 @@ class Model {
 class ModelsConfig {
   static ModelsConfig? _instance;
 
-  final Map<String, Provider> providers;
+  final Map<String, ModelProvider> providers;
   final List<Model> llmModels;
   final List<Model> asrModels;
   final List<Model> ttsModels;
@@ -71,9 +71,9 @@ class ModelsConfig {
 
     // Parse providers
     final providersJson = json['providers'] as Map<String, dynamic>;
-    final providers = <String, Provider>{};
+    final providers = <String, ModelProvider>{};
     for (final entry in providersJson.entries) {
-      providers[entry.key] = Provider.fromJson(
+      providers[entry.key] = ModelProvider.fromJson(
         entry.key,
         entry.value as Map<String, dynamic>,
       );
@@ -114,7 +114,7 @@ class ModelsConfig {
   }
 
   /// Get provider by name.
-  Provider getProvider(String name) {
+  ModelProvider getProvider(String name) {
     final provider = providers[name];
     if (provider == null) {
       throw ArgumentError('Unknown provider: $name');

@@ -1,22 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models_config.dart';
+import '../providers/settings_provider.dart';
 import '../services/livekit_service.dart';
 import '../theme/tokens.dart';
 
 enum AppMode { chat, recordings }
 
-class AppSidebar extends StatelessWidget {
+class AppSidebar extends ConsumerWidget {
   final AppMode currentMode;
   final ValueChanged<AppMode> onModeChanged;
-  final SttProvider sttProvider;
-  final ValueChanged<SttProvider> onSttProviderChanged;
-  final Model llmModel;
-  final ValueChanged<Model> onLlmModelChanged;
-  final bool ttsEnabled;
-  final ValueChanged<bool> onTtsEnabledChanged;
-  final Set<String> excludedAgents;
-  final ValueChanged<Set<String>> onExcludedAgentsChanged;
   final ConnectionStatus connectionStatus;
   final bool isAgentConnected;
   final String wsUrl;
@@ -27,14 +21,6 @@ class AppSidebar extends StatelessWidget {
     super.key,
     required this.currentMode,
     required this.onModeChanged,
-    required this.sttProvider,
-    required this.onSttProviderChanged,
-    required this.llmModel,
-    required this.onLlmModelChanged,
-    required this.ttsEnabled,
-    required this.onTtsEnabledChanged,
-    required this.excludedAgents,
-    required this.onExcludedAgentsChanged,
     required this.connectionStatus,
     required this.isAgentConnected,
     required this.wsUrl,
@@ -43,7 +29,10 @@ class AppSidebar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
     return Container(
       width: 140,
       color: AppTokens.backgroundSecondary,
@@ -81,29 +70,29 @@ class AppSidebar extends StatelessWidget {
               children: [
                 _SettingDropdown<SttProvider>(
                   label: 'ASR',
-                  value: sttProvider,
+                  value: settings.sttProvider,
                   items: SttProvider.values,
-                  onChanged: onSttProviderChanged,
+                  onChanged: notifier.setSttProvider,
                   itemLabel: _sttProviderLabel,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
                 _SettingDropdown<Model>(
                   label: 'LLM',
-                  value: llmModel,
+                  value: settings.llmModel,
                   items: ModelsConfig.instance.llmModels,
-                  onChanged: onLlmModelChanged,
+                  onChanged: notifier.setLlmModel,
                   itemLabel: (m) => m.displayName,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
                 _SettingToggle(
                   label: 'TTS',
-                  value: ttsEnabled,
-                  onChanged: onTtsEnabledChanged,
+                  value: settings.ttsEnabled,
+                  onChanged: notifier.setTtsEnabled,
                 ),
                 const SizedBox(height: AppTokens.spacingMd),
                 _AgentSelector(
-                  excludedAgents: excludedAgents,
-                  onChanged: onExcludedAgentsChanged,
+                  excludedAgents: settings.excludedAgents,
+                  onChanged: notifier.setExcludedAgents,
                 ),
               ],
             ),
