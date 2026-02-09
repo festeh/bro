@@ -12,6 +12,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'models/models_config.dart';
 import 'pages/home_page.dart';
 import 'providers/settings_provider.dart';
+import 'providers/storage_providers.dart';
 import 'services/egress_service.dart';
 import 'services/livekit_service.dart';
 import 'services/settings_service.dart';
@@ -82,11 +83,12 @@ void main() async {
       overrides: [
         settingsServiceProvider.overrideWithValue(settingsService),
         liveKitServiceProvider.overrideWithValue(liveKitService),
+        storageServiceProvider.overrideWithValue(storageService),
       ],
       child: BroApp(
         liveKitService: liveKitService,
-        egressService: egressService,
         storageService: storageService,
+        egressService: egressService,
       ),
     ),
   );
@@ -113,14 +115,14 @@ Future<String> _getRecordingsDir() async {
 
 class BroApp extends StatefulWidget {
   final LiveKitService liveKitService;
-  final EgressService egressService;
   final StorageService storageService;
+  final EgressService egressService;
 
   const BroApp({
     super.key,
     required this.liveKitService,
-    required this.egressService,
     required this.storageService,
+    required this.egressService,
   });
 
   @override
@@ -142,10 +144,7 @@ class _BroAppState extends State<BroApp> {
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: HomePage(
-        liveKitService: widget.liveKitService,
         egressService: widget.egressService,
-        storageService: widget.storageService,
-        recordingsDir: widget.storageService.recordingsDir,
       ),
     );
   }

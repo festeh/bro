@@ -9,10 +9,11 @@ import 'package:uuid/uuid.dart';
 
 import '../models/models_config.dart';
 import '../models/recording.dart';
+import '../providers/livekit_providers.dart';
 import '../providers/settings_provider.dart';
+import '../providers/storage_providers.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
-import '../services/storage_service.dart';
 import '../services/waveform_service.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_sidebar.dart';
@@ -25,17 +26,11 @@ import 'chat_page.dart';
 final _log = Logger('HomePage');
 
 class HomePage extends ConsumerStatefulWidget {
-  final LiveKitService liveKitService;
   final EgressService egressService;
-  final StorageService storageService;
-  final String recordingsDir;
 
   const HomePage({
     super.key,
-    required this.liveKitService,
     required this.egressService,
-    required this.storageService,
-    required this.recordingsDir,
   });
 
   @override
@@ -49,9 +44,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   final _chatPageKey = GlobalKey<ChatPageState>();
   AppMode _currentMode = AppMode.chat;
-  List<Recording> _recordings = [];
-  ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
-  bool _isAgentConnected = false;
   bool _isRecording = false;
   bool _isLoading = false;
   String? _currentEgressId;
@@ -62,55 +54,29 @@ class _HomePageState extends ConsumerState<HomePage> {
   String? _currentTranscript;
   String? _pendingTranscript;
 
-  StreamSubscription<List<Recording>>? _recordingsSub;
-  StreamSubscription<ConnectionStatus>? _connectionSub;
-  StreamSubscription<bool>? _agentConnectedSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<bool>? _playingStateSub;
-  StreamSubscription<TranscriptionEvent>? _transcriptionSub;
 
   @override
   void initState() {
     super.initState();
     _player = Player();
-    _init();
+    _initPlayer();
+    _connectToLiveKit();
   }
 
-  Future<void> _init() async {
-    // Subscribe to recordings
-    _recordingsSub = widget.storageService.recordingsStream.listen((
-      recordings,
-    ) {
-      if (!mounted) return;
-      setState(() => _recordings = recordings);
-    });
-
-    // Subscribe to connection status
-    _connectionSub = widget.liveKitService.connectionStatus.listen((status) {
-      if (!mounted) return;
-      setState(() => _connectionStatus = status);
-    });
-
-    // Subscribe to agent connection status
-    _agentConnectedSub = widget.liveKitService.agentConnectedStream.listen((
-      connected,
-    ) {
-      if (!mounted) return;
-      setState(() => _isAgentConnected = connected);
-    });
-
-    // Subscribe to audio player position
+  void _initPlayer() {
     _positionSub = _player.stream.position.listen((position) {
       if (!mounted) return;
       final duration = _player.state.duration;
       if (duration.inMilliseconds > 0) {
         setState(() {
-          _playbackProgress = position.inMilliseconds / duration.inMilliseconds;
+          _playbackProgress =
+              position.inMilliseconds / duration.inMilliseconds;
         });
       }
     });
 
-    // Subscribe to player state - reset when playback completes
     _playingStateSub = _player.stream.playing.listen((playing) {
       if (!mounted) return;
       if (!playing && _player.state.completed) {
@@ -120,37 +86,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         });
       }
     });
-
-    // Subscribe to transcription events
-    _transcriptionSub = widget.liveKitService.transcriptionStream.listen((
-      event,
-    ) {
-      if (!mounted) return;
-      setState(() {
-        _currentTranscript = event.text;
-      });
-
-      if (event.isFinal && _isRecording) {
-        // Append final transcript segments
-        if (_pendingTranscript == null || _pendingTranscript!.isEmpty) {
-          _pendingTranscript = event.text;
-        } else {
-          _pendingTranscript = '$_pendingTranscript ${event.text}';
-        }
-      }
-    });
-
-    // Load initial recordings
-    final recordings = await widget.storageService.getRecordings();
-    setState(() => _recordings = recordings);
-
-    // Connect to LiveKit
-    await _connectToLiveKit();
   }
 
   Future<void> _connectToLiveKit() async {
     try {
-      await widget.liveKitService.connect();
+      await ref.read(liveKitServiceProvider).connect();
     } catch (e, st) {
       _showError('Failed to connect to LiveKit: $e', e, st);
     }
@@ -175,19 +115,18 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _startRecording() async {
-    // Enable microphone first
-    final trackId = await widget.liveKitService.startVoiceSession();
+    final liveKit = ref.read(liveKitServiceProvider);
+
+    final trackId = await liveKit.startVoiceSession();
     if (trackId == null) {
       throw Exception('Failed to enable microphone');
     }
 
-    // Generate filename with timestamp
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
     final filepath = '/out/recording-$timestamp.ogg';
 
-    // Start egress
     final egress = await widget.egressService.startTrackEgress(
-      roomName: widget.liveKitService.roomName,
+      roomName: liveKit.roomName,
       trackId: trackId,
       filepath: filepath,
     );
@@ -197,7 +136,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     _currentTranscript = null;
     _pendingTranscript = null;
 
-    // Start timer
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() {
         _recordingDuration += const Duration(seconds: 1);
@@ -211,29 +149,30 @@ class _HomePageState extends ConsumerState<HomePage> {
     _recordingTimer?.cancel();
     _recordingTimer = null;
 
+    final liveKit = ref.read(liveKitServiceProvider);
+    final storage = ref.read(storageServiceProvider);
+
     if (_currentEgressId != null) {
       final egress = await widget.egressService.stopEgress(_currentEgressId!);
 
-      // Construct full path from recordings dir and filename
       final filePath = egress.filename != null
-          ? p.join(widget.recordingsDir, egress.filename!)
+          ? p.join(storage.recordingsDir, egress.filename!)
           : '';
 
-      // Create recording entry (waveform extracted lazily on display)
       final recording = Recording(
         id: _uuid.v4(),
         egressId: _currentEgressId,
-        title: 'Recording ${_recordings.length + 1}',
+        title: 'Recording',
         durationMs: _recordingDuration.inMilliseconds,
         filePath: filePath,
         createdAt: DateTime.now(),
         transcript: _pendingTranscript,
       );
 
-      await widget.storageService.addRecording(recording);
+      await storage.addRecording(recording);
     }
 
-    await widget.liveKitService.stopVoiceSession();
+    await liveKit.stopVoiceSession();
 
     setState(() {
       _isRecording = false;
@@ -246,10 +185,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _playPauseRecording(Recording recording) async {
     if (_playingRecordingId == recording.id) {
-      // Pause/resume current
       await _player.playOrPause();
     } else {
-      // Play new recording
       await _player.open(Media(recording.filePath));
       setState(() {
         _playingRecordingId = recording.id;
@@ -258,16 +195,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  /// Extract waveform for a recording if not already present
   Future<void> _extractWaveformIfNeeded(Recording recording) async {
     if (recording.waveformData != null) return;
 
     final waveform = await _waveformService.extractWaveform(recording.filePath);
-    // null means file not ready yet - don't store, will retry on next trigger
     if (waveform == null) return;
 
     final updated = recording.copyWith(waveformData: waveform);
-    await widget.storageService.updateRecording(updated);
+    await ref.read(storageServiceProvider).updateRecording(updated);
   }
 
   Future<void> _deleteRecording(Recording recording) async {
@@ -278,7 +213,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         _playbackProgress = 0.0;
       });
     }
-    await widget.storageService.deleteRecording(recording.id);
+    await ref.read(storageServiceProvider).deleteRecording(recording.id);
   }
 
   void _showError(String message, [Object? error, StackTrace? stackTrace]) {
@@ -299,62 +234,96 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
-    // Cancel player subscriptions first to prevent callbacks during disposal
     _positionSub?.cancel();
     _playingStateSub?.cancel();
-    // Stop player before disposing to clean up native resources
     _player.stop();
     _player.dispose();
-    // Cancel other subscriptions
-    _recordingsSub?.cancel();
-    _connectionSub?.cancel();
-    _agentConnectedSub?.cancel();
-    _transcriptionSub?.cancel();
     _recordingTimer?.cancel();
     super.dispose();
   }
 
   void _onModeChanged(AppMode mode) {
     setState(() => _currentMode = mode);
-    // Update agent mode based on app mode
-    final agentMode = mode == AppMode.chat
-        ? AgentMode.chat
-        : AgentMode.transcribe;
-    widget.liveKitService.setAgentMode(agentMode);
+    final agentMode =
+        mode == AppMode.chat ? AgentMode.chat : AgentMode.transcribe;
+    ref.read(liveKitServiceProvider).setAgentMode(agentMode);
   }
 
   static const double _mobileBreakpoint = 600;
 
   @override
   Widget build(BuildContext context) {
+    // Watch shared Riverpod state
+    final connectionAsync = ref.watch(connectionStatusProvider);
+    final agentConnectedAsync = ref.watch(agentConnectedProvider);
+    final recordingsAsync = ref.watch(recordingsProvider);
+
+    final connectionStatus = connectionAsync.valueOrNull ??
+        ConnectionStatus.disconnected;
+    final isAgentConnected = agentConnectedAsync.valueOrNull ?? false;
+    final recordings = recordingsAsync.valueOrNull ?? [];
+
+    // Listen to transcription events for recording mode
+    ref.listen(transcriptionProvider, (_, next) {
+      next.whenData((event) {
+        if (!_isRecording && _currentMode != AppMode.recordings) return;
+        setState(() {
+          _currentTranscript = event.text;
+        });
+        if (event.isFinal && _isRecording) {
+          if (_pendingTranscript == null || _pendingTranscript!.isEmpty) {
+            _pendingTranscript = event.text;
+          } else {
+            _pendingTranscript = '$_pendingTranscript ${event.text}';
+          }
+        }
+      });
+    });
+
+    final liveKit = ref.watch(liveKitServiceProvider);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < _mobileBreakpoint;
-        return isMobile ? _buildMobileLayout() : _buildDesktopLayout();
+        return isMobile
+            ? _buildMobileLayout(
+                connectionStatus, isAgentConnected, recordings, liveKit)
+            : _buildDesktopLayout(
+                connectionStatus, isAgentConnected, recordings, liveKit);
       },
     );
   }
 
-  Widget _buildDesktopLayout() {
+  Widget _buildDesktopLayout(
+    ConnectionStatus connectionStatus,
+    bool isAgentConnected,
+    List<Recording> recordings,
+    LiveKitService liveKit,
+  ) {
     return Scaffold(
       body: Row(
         children: [
           AppSidebar(
             currentMode: _currentMode,
             onModeChanged: _onModeChanged,
-            connectionStatus: _connectionStatus,
-            isAgentConnected: _isAgentConnected,
-            wsUrl: widget.liveKitService.wsUrl,
-            roomName: widget.liveKitService.roomName,
-            apiKey: widget.liveKitService.tokenService.apiKey,
+            connectionStatus: connectionStatus,
+            isAgentConnected: isAgentConnected,
+            wsUrl: liveKit.wsUrl,
+            roomName: liveKit.roomName,
+            apiKey: liveKit.tokenService.apiKey,
           ),
-          Expanded(child: _buildMainContent()),
+          Expanded(child: _buildMainContent(connectionStatus, recordings)),
         ],
       ),
     );
   }
 
-  Widget _buildMobileLayout() {
+  Widget _buildMobileLayout(
+    ConnectionStatus connectionStatus,
+    bool isAgentConnected,
+    List<Recording> recordings,
+    LiveKitService liveKit,
+  ) {
     return Scaffold(
       appBar: AppBar(
         leading: PopupMenuButton<AppMode>(
@@ -435,23 +404,26 @@ class _HomePageState extends ConsumerState<HomePage> {
             tooltip: 'Settings',
           ),
           _ConnectionIndicator(
-            status: _connectionStatus,
-            isAgentConnected: _isAgentConnected,
-            wsUrl: widget.liveKitService.wsUrl,
-            roomName: widget.liveKitService.roomName,
-            apiKey: widget.liveKitService.tokenService.apiKey,
+            status: connectionStatus,
+            isAgentConnected: isAgentConnected,
+            wsUrl: liveKit.wsUrl,
+            roomName: liveKit.roomName,
+            apiKey: liveKit.tokenService.apiKey,
           ),
           const SizedBox(width: AppTokens.spacingMd),
         ],
       ),
-      body: _buildMainContent(),
+      body: _buildMainContent(connectionStatus, recordings),
     );
   }
 
-  Widget _buildMainContent() {
+  Widget _buildMainContent(
+    ConnectionStatus connectionStatus,
+    List<Recording> recordings,
+  ) {
     return _currentMode == AppMode.chat
-        ? ChatPage(key: _chatPageKey, liveKitService: widget.liveKitService)
-        : _buildRecordingsContent();
+        ? ChatPage(key: _chatPageKey)
+        : _buildRecordingsContent(connectionStatus, recordings);
   }
 
   void _showSettingsSheet() {
@@ -465,7 +437,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Widget _buildRecordingsContent() {
+  Widget _buildRecordingsContent(
+    ConnectionStatus connectionStatus,
+    List<Recording> recordings,
+  ) {
     return Column(
       children: [
         if (_isRecording) ...[
@@ -480,7 +455,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
         Expanded(
           child: RecordingList(
-            recordings: _recordings,
+            recordings: recordings,
             playingRecordingId: _playingRecordingId,
             playbackProgress: _playbackProgress,
             onPlayPause: _playPauseRecording,
@@ -496,7 +471,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           child: RecordButton(
             isRecording: _isRecording,
             isLoading: _isLoading,
-            onPressed: _connectionStatus == ConnectionStatus.connected
+            onPressed: connectionStatus == ConnectionStatus.connected
                 ? _toggleRecording
                 : null,
           ),

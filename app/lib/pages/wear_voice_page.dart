@@ -1,121 +1,87 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../providers/livekit_providers.dart';
+import '../providers/settings_provider.dart';
 import '../services/livekit_service.dart';
 
-class WearVoicePage extends StatefulWidget {
-  final LiveKitService liveKitService;
-
-  const WearVoicePage({super.key, required this.liveKitService});
+class WearVoicePage extends ConsumerStatefulWidget {
+  const WearVoicePage({super.key});
 
   @override
-  State<WearVoicePage> createState() => _WearVoicePageState();
+  ConsumerState<WearVoicePage> createState() => _WearVoicePageState();
 }
 
-class _WearVoicePageState extends State<WearVoicePage> {
-  ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
-  bool _isVoiceActive = false;
-  bool _isAgentConnected = false;
+class _WearVoicePageState extends ConsumerState<WearVoicePage> {
   bool _isConnecting = false;
-
-  StreamSubscription<ConnectionStatus>? _connectionSub;
-  StreamSubscription<String?>? _audioTrackSub;
-  StreamSubscription<bool>? _agentSub;
 
   @override
   void initState() {
     super.initState();
-    _setupSubscriptions();
     _connectToRoom();
   }
 
-  void _setupSubscriptions() {
-    _connectionSub = widget.liveKitService.connectionStatus.listen((status) {
-      setState(() {
-        _connectionStatus = status;
-        _isConnecting = status == ConnectionStatus.connecting;
-      });
-    });
-
-    _audioTrackSub = widget.liveKitService.audioTrackId.listen((trackId) {
-      setState(() {
-        _isVoiceActive = trackId != null;
-      });
-    });
-
-    _agentSub = widget.liveKitService.agentConnectedStream.listen((connected) {
-      setState(() {
-        _isAgentConnected = connected;
-      });
-    });
-  }
-
   Future<void> _connectToRoom() async {
-    // Request microphone permission
     final status = await Permission.microphone.request();
-    if (!status.isGranted) {
-      return;
-    }
+    if (!status.isGranted) return;
 
     setState(() => _isConnecting = true);
     try {
-      await widget.liveKitService.connect();
+      await ref.read(liveKitServiceProvider).connect();
     } catch (e) {
       // Connection error handled by status stream
     }
+    if (mounted) setState(() => _isConnecting = false);
   }
 
-  Future<void> _toggleVoice() async {
-    if (_connectionStatus != ConnectionStatus.connected) return;
+  Future<void> _toggleVoice(ConnectionStatus connectionStatus, bool isVoiceActive) async {
+    if (connectionStatus != ConnectionStatus.connected) return;
 
-    if (_isVoiceActive) {
-      await widget.liveKitService.stopVoiceSession();
+    final liveKit = ref.read(liveKitServiceProvider);
+    if (isVoiceActive) {
+      await liveKit.stopVoiceSession();
     } else {
-      await widget.liveKitService.startVoiceSession();
+      await liveKit.startVoiceSession();
     }
-  }
-
-  @override
-  void dispose() {
-    _connectionSub?.cancel();
-    _audioTrackSub?.cancel();
-    _agentSub?.cancel();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final connectionStatus =
+        ref.watch(connectionStatusProvider).valueOrNull ??
+            ConnectionStatus.disconnected;
+    final isAgentConnected =
+        ref.watch(agentConnectedProvider).valueOrNull ?? false;
+    final isVoiceActive =
+        ref.watch(audioTrackIdProvider).valueOrNull != null;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Status indicator
-            _buildStatusIndicator(),
+            _buildStatusIndicator(connectionStatus, isAgentConnected),
             const SizedBox(height: 16),
-
-            // Mic button
-            _buildMicButton(),
+            _buildMicButton(connectionStatus, isVoiceActive),
             const SizedBox(height: 12),
-
-            // Status text
-            _buildStatusText(),
+            _buildStatusText(
+                connectionStatus, isAgentConnected, isVoiceActive),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusIndicator() {
+  Widget _buildStatusIndicator(
+      ConnectionStatus connectionStatus, bool isAgentConnected) {
     Color color;
-    if (_connectionStatus == ConnectionStatus.connected && _isAgentConnected) {
+    if (connectionStatus == ConnectionStatus.connected && isAgentConnected) {
       color = Colors.green;
-    } else if (_connectionStatus == ConnectionStatus.connected) {
+    } else if (connectionStatus == ConnectionStatus.connected) {
       color = Colors.orange;
-    } else if (_connectionStatus == ConnectionStatus.connecting) {
+    } else if (connectionStatus == ConnectionStatus.connecting) {
       color = Colors.blue;
     } else {
       color = Colors.red;
@@ -128,23 +94,24 @@ class _WearVoicePageState extends State<WearVoicePage> {
     );
   }
 
-  Widget _buildMicButton() {
-    final bool canPress = _connectionStatus == ConnectionStatus.connected;
+  Widget _buildMicButton(
+      ConnectionStatus connectionStatus, bool isVoiceActive) {
+    final bool canPress = connectionStatus == ConnectionStatus.connected;
 
     return GestureDetector(
-      onTap: canPress ? _toggleVoice : null,
+      onTap: canPress ? () => _toggleVoice(connectionStatus, isVoiceActive) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 100,
         height: 100,
         decoration: BoxDecoration(
-          color: _isVoiceActive ? Colors.red : Colors.grey[800],
+          color: isVoiceActive ? Colors.red : Colors.grey[800],
           shape: BoxShape.circle,
           border: Border.all(
-            color: _isVoiceActive ? Colors.red[300]! : Colors.grey[600]!,
+            color: isVoiceActive ? Colors.red[300]! : Colors.grey[600]!,
             width: 3,
           ),
-          boxShadow: _isVoiceActive
+          boxShadow: isVoiceActive
               ? [
                   BoxShadow(
                     color: Colors.red.withValues(alpha: 0.4),
@@ -155,7 +122,7 @@ class _WearVoicePageState extends State<WearVoicePage> {
               : null,
         ),
         child: Icon(
-          _isVoiceActive ? Icons.mic : Icons.mic_none,
+          isVoiceActive ? Icons.mic : Icons.mic_none,
           size: 48,
           color: canPress ? Colors.white : Colors.grey[500],
         ),
@@ -163,17 +130,18 @@ class _WearVoicePageState extends State<WearVoicePage> {
     );
   }
 
-  Widget _buildStatusText() {
+  Widget _buildStatusText(ConnectionStatus connectionStatus,
+      bool isAgentConnected, bool isVoiceActive) {
     String text;
     if (_isConnecting) {
       text = 'Connecting...';
-    } else if (_connectionStatus == ConnectionStatus.error) {
+    } else if (connectionStatus == ConnectionStatus.error) {
       text = 'Connection error';
-    } else if (_connectionStatus != ConnectionStatus.connected) {
+    } else if (connectionStatus != ConnectionStatus.connected) {
       text = 'Disconnected';
-    } else if (!_isAgentConnected) {
+    } else if (!isAgentConnected) {
       text = 'Waiting for agent';
-    } else if (_isVoiceActive) {
+    } else if (isVoiceActive) {
       text = 'Listening...';
     } else {
       text = 'Tap to speak';

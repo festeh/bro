@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'models/models_config.dart';
 import 'pages/wear_voice_page.dart';
+import 'providers/settings_provider.dart';
 import 'services/livekit_service.dart';
 import 'services/token_service.dart';
 
@@ -45,7 +47,14 @@ void main() async {
     deviceId: deviceId,
   );
 
-  runApp(WearVoiceApp(liveKitService: liveKitService));
+  runApp(
+    ProviderScope(
+      overrides: [
+        liveKitServiceProvider.overrideWithValue(liveKitService),
+      ],
+      child: WearVoiceApp(liveKitService: liveKitService),
+    ),
+  );
 }
 
 class WearVoiceApp extends StatefulWidget {
@@ -70,7 +79,7 @@ class _WearVoiceAppState extends State<WearVoiceApp> {
       title: 'bro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black),
-      home: WearVoicePage(liveKitService: widget.liveKitService),
+      home: const WearVoicePage(),
     );
   }
 }
