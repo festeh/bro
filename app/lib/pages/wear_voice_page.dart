@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../providers/livekit_providers.dart';
 import '../providers/settings_provider.dart';
 import '../services/livekit_service.dart';
+import 'wear_settings_page.dart';
 
 class WearVoicePage extends ConsumerStatefulWidget {
   const WearVoicePage({super.key});
@@ -58,18 +59,41 @@ class _WearVoicePageState extends ConsumerState<WearVoicePage> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildStatusIndicator(connectionStatus, isAgentConnected),
-            const SizedBox(height: 16),
-            _buildMicButton(connectionStatus, isVoiceActive),
-            const SizedBox(height: 12),
-            _buildStatusText(
-                connectionStatus, isAgentConnected, isVoiceActive),
-          ],
+      body: _SwipeDetector(
+        onSwipeUp: _openSettings,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildStatusIndicator(connectionStatus, isAgentConnected),
+              const SizedBox(height: 16),
+              _buildMicButton(connectionStatus, isVoiceActive),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const WearSettingsPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            )),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 250),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
       ),
     );
   }
@@ -148,5 +172,36 @@ class _WearVoicePageState extends ConsumerState<WearVoicePage> {
     }
 
     return Text(text, style: TextStyle(color: Colors.grey[400], fontSize: 14));
+  }
+}
+
+/// Detects vertical swipes using raw pointer events so it doesn't
+/// interfere with child GestureDetector tap handlers.
+class _SwipeDetector extends StatefulWidget {
+  final VoidCallback onSwipeUp;
+  final Widget child;
+
+  const _SwipeDetector({required this.onSwipeUp, required this.child});
+
+  @override
+  State<_SwipeDetector> createState() => _SwipeDetectorState();
+}
+
+class _SwipeDetectorState extends State<_SwipeDetector> {
+  double? _startY;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (e) => _startY = e.position.dy,
+      onPointerUp: (e) {
+        if (_startY != null) {
+          final dy = e.position.dy - _startY!;
+          if (dy < -50) widget.onSwipeUp();
+          _startY = null;
+        }
+      },
+      child: widget.child,
+    );
   }
 }

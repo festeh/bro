@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 import 'models/models_config.dart';
 import 'pages/wear_voice_page.dart';
 import 'providers/settings_provider.dart';
 import 'services/livekit_service.dart';
+import 'services/settings_service.dart';
 import 'services/token_service.dart';
 
 const String _livekitUrl = String.fromEnvironment(
@@ -27,16 +26,12 @@ void main() async {
     print('${record.level.name}: ${record.loggerName}: ${record.message}');
   });
 
-  // Generate persistent device ID
-  final prefs = await SharedPreferences.getInstance();
-  var deviceId = prefs.getString('deviceId');
-  if (deviceId == null) {
-    deviceId = const Uuid().v4().substring(0, 8);
-    await prefs.setString('deviceId', deviceId);
-  }
-
   // Load model configuration
   await ModelsConfig.load();
+
+  // Initialize settings (generates persistent device ID)
+  final settingsService = SettingsService();
+  await settingsService.init();
 
   // Initialize services
   final tokenService = TokenService();
@@ -44,12 +39,13 @@ void main() async {
     tokenService: tokenService,
     wsUrl: _livekitUrl,
     identity: 'wear-user',
-    deviceId: deviceId,
+    deviceId: settingsService.deviceId,
   );
 
   runApp(
     ProviderScope(
       overrides: [
+        settingsServiceProvider.overrideWithValue(settingsService),
         liveKitServiceProvider.overrideWithValue(liveKitService),
       ],
       child: WearVoiceApp(liveKitService: liveKitService),
