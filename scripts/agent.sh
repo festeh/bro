@@ -4,4 +4,4 @@ cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 source .env
 export PYTHONPATH="$PWD"
-exec uv run python agent/voice_agent.py dev
+exec uv run python agent/main.py dev

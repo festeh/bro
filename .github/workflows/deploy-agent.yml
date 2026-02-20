@@ -77,7 +77,7 @@ jobs:
           cd /opt/bro
           export PATH="/root/.local/bin:$PATH"
           uv sync --no-dev
-          PYTHONPATH=/opt/bro uv run python agent/voice_agent.py download-files
+          PYTHONPATH=/opt/bro uv run python agent/main.py download-files
           systemctl restart bro-livekit
           systemctl restart bro-agent
           sleep 3
