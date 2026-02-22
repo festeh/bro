@@ -104,11 +104,8 @@ Future<String> _getRecordingsDir() async {
   } else {
     // Linux: use project recordings dir (for LiveKit egress mount)
     final cwd = Directory.current.path;
-    var recordingsDir = p.normalize(p.join(cwd, '..', 'recordings'));
-    if (!Directory(recordingsDir).existsSync()) {
-      // Fallback to absolute path for development
-      recordingsDir = '/home/dima/projects/bro/recordings';
-    }
+    final recordingsDir = p.normalize(p.join(cwd, '..', 'recordings'));
+    await Directory(recordingsDir).create(recursive: true);
     return recordingsDir;
   }
 }

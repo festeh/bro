@@ -84,7 +84,6 @@ class SessionNotificationEvent {
 }
 
 class LiveKitService {
-  static const String _defaultWsUrl = 'ws://localhost:7880';
   static const String _defaultIdentity = 'desktop-user';
   static const Duration _agentTimeout = Duration(seconds: 3);
   static const int _maxAgentRetries = 5;
@@ -144,11 +143,11 @@ class LiveKitService {
 
   LiveKitService({
     TokenService? tokenService,
-    String? wsUrl,
+    required String wsUrl,
     String? identity,
     required String deviceId,
   })  : _tokenService = tokenService ?? TokenService(),
-        _wsUrl = wsUrl ?? _defaultWsUrl,
+        _wsUrl = wsUrl,
         _identity = identity ?? _defaultIdentity,
         _roomName = 'bro-$deviceId' {
     _llmModel = ModelsConfig.instance.defaultLlm;
