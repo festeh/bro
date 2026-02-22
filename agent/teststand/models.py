@@ -1,6 +1,6 @@
 """Model list for the test stand - loaded from central models.json."""
 
-from ai.models_config import Model, get_default_llm, get_llm_by_index, get_llm_models
+from my_agents.models_config import Model, get_default_llm, get_llm_by_index, get_llm_models
 
 # Re-export for backwards compatibility
 MODELS = get_llm_models()

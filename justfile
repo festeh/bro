@@ -78,7 +78,7 @@ wear-logs:
 # Sync models.json to app assets
 sync-models:
     mkdir -p app/assets
-    cp models.json app/assets/models.json
+    cp ../my-agents/models.json app/assets/models.json
     @echo "Synced models.json to app/assets/"
 
 # Clean app build cache
@@ -181,12 +181,12 @@ clean:
 # Lint
 lint:
     cd app && flutter analyze
-    uv run ruff check agent ai
+    uv run ruff check agent
 
 # Format code
 fmt:
     cd app && dart format lib/
-    uv run ruff format agent ai
+    uv run ruff format agent
 
 # ─────────────────────────────────────────────────────────────
 # Python (shared monorepo)
@@ -198,40 +198,40 @@ deps-py:
 
 # Lint Python code
 lint-py:
-    uv run ruff check agent ai
+    uv run ruff check agent
 
 # Auto-fix Python lint issues
 fix-py:
-    uv run ruff check agent ai --fix
+    uv run ruff check agent --fix
 
 # Type check Python code
 typecheck-py:
-    uv run ty check agent ai
+    uv run ty check agent
 
 # Run all Python checks (lint + typecheck)
 check-py:
-    uv run ruff check agent ai && uv run ty check agent ai
+    uv run ruff check agent && uv run ty check agent
 
 # ─────────────────────────────────────────────────────────────
-# Frontend
+# Frontend (lives in ../my-agents/frontend)
 # ─────────────────────────────────────────────────────────────
 
 # Run frontend dev server
 fe:
-    cd ai/frontend && npm run dev
+    cd ../my-agents/frontend && npm run dev
 
 # Build frontend for production
 fe-build:
-    cd ai/frontend && npm run build
+    cd ../my-agents/frontend && npm run build
 
 # Install frontend dependencies
 fe-deps:
-    cd ai/frontend && npm install
+    cd ../my-agents/frontend && npm install
 
 # Run both AI server and frontend (requires parallel execution)
 dev:
     #!/usr/bin/env bash
     trap 'kill 0' EXIT
-    (uv run uvicorn ai.server:app --reload --host 0.0.0.0 --port 8000) &
-    (cd ai/frontend && npm run dev -- --port 5173) &
+    (uv run uvicorn my_agents.server:app --reload --host 0.0.0.0 --port 8000) &
+    (cd ../my-agents/frontend && npm run dev -- --port 5173) &
     wait

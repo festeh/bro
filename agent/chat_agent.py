@@ -30,9 +30,9 @@ from agent.settings import (
     create_stt,
 )
 from agent.task.task_agent import TaskAgent
-from ai.graph import classify_intent
-from ai.models import Intent
-from ai.models_config import create_chat_llm
+from my_agents.graph import classify_intent
+from my_agents.models import Intent
+from my_agents.models_config import create_chat_llm
 
 logger = logging.getLogger("voice-agent")
 

@@ -23,8 +23,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from agent.constants import get_basidian_url
-from ai.llm_logging import get_llm_callbacks
-from ai.models_config import create_chat_llm, get_llm_by_model_id
+from my_agents.llm_logging import get_llm_callbacks
+from my_agents.models_config import create_chat_llm, get_llm_by_model_id
 
 logger = logging.getLogger("basidian-agent")
 

@@ -7,7 +7,7 @@ from typing import Any
 from livekit.agents import JobContext
 from livekit.plugins import deepgram, elevenlabs, openai
 
-from ai.models_config import get_default_llm, get_llm_by_model_id
+from my_agents.models_config import get_default_llm, get_llm_by_model_id
 
 # Session inactivity timeout
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
