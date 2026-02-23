@@ -12,17 +12,14 @@ default:
 # Emulator
 # ─────────────────────────────────────────────────────────────
 
-# List available AVDs
-avds:
-    emulator -list-avds
-
-# Start WearOS emulator (workspace 3 via windowrule)
-emu-wear:
-    emulator -avd {{wear_avd}}
-
-# Start phone emulator (workspace 3 via windowrule)
-emu-phone:
-    emulator -avd {{phone_avd}}
+# Start emulator (wear or phone)
+emu type:
+    #!/usr/bin/env bash
+    case "{{type}}" in
+        wear)  emulator -avd {{wear_avd}} ;;
+        phone) emulator -avd {{phone_avd}} ;;
+        *) echo "Unknown type: {{type}}. Use 'wear' or 'phone'." && exit 1 ;;
+    esac
 
 # Kill all emulators
 emu-kill:
@@ -33,106 +30,91 @@ devices:
     adb devices -l
 
 # ─────────────────────────────────────────────────────────────
-# Wear
+# App
 # ─────────────────────────────────────────────────────────────
 
-# Run wear app on emulator (finds first emulator device)
-wear:
+# Run app (linux, android, wear, wear-device, phone-device)
+app target='linux':
     #!/usr/bin/env bash
-    device=$(adb devices | grep emulator | head -1 | cut -f1)
-    if [ -z "$device" ]; then
-        echo "No emulator found. Run 'just emu-wear' first."
-        exit 1
-    fi
-    cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device"
-
-# Run wear app on real Samsung watch (SM-* device)
-wear-device:
-    #!/usr/bin/env bash
-    device=$(flutter devices 2>/dev/null | grep "SM " | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
-    if [ -z "$device" ]; then
-        echo "No Samsung watch found. Connect via Wireless debugging."
-        exit 1
-    fi
-    echo "Running on device: $device"
-    cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device" \
-        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
+    DEFS="--dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
         --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
         --dart-define=AI_BASE_URL=$AI_BASE_URL \
-        --dart-define=AI_API_KEY=$AI_API_KEY
+        --dart-define=AI_API_KEY=$AI_API_KEY"
+    case "{{target}}" in
+        linux)
+            cd app && flutter run -d linux $DEFS
+            ;;
+        android)
+            device=$(adb devices | grep emulator | head -1 | cut -f1)
+            if [ -z "$device" ]; then
+                echo "No emulator found. Run 'just emu phone' first."
+                exit 1
+            fi
+            cd app && flutter run -d "$device"
+            ;;
+        wear)
+            device=$(adb devices | grep emulator | head -1 | cut -f1)
+            if [ -z "$device" ]; then
+                echo "No emulator found. Run 'just emu wear' first."
+                exit 1
+            fi
+            cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device"
+            ;;
+        wear-device)
+            device=$(flutter devices 2>/dev/null | grep "SM " | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
+            if [ -z "$device" ]; then
+                echo "No Samsung watch found. Connect via Wireless debugging."
+                exit 1
+            fi
+            echo "Running on device: $device"
+            cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device" $DEFS
+            ;;
+        phone-device)
+            device=$(flutter devices 2>/dev/null | grep "A065" | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
+            if [ -z "$device" ]; then
+                echo "No A065 device found. Connect via Wireless debugging."
+                exit 1
+            fi
+            echo "Running on device: $device"
+            cd app && flutter run -d "$device"
+            ;;
+        *)
+            echo "Unknown target: {{target}}. Use linux, android, wear, wear-device, or phone-device."
+            exit 1
+            ;;
+    esac
 
-# Build wear release APK
-wear-build:
-    cd app && flutter build apk --flavor wear -t lib/main_wear.dart \
-        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
-        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
-        --dart-define=AI_BASE_URL=$AI_BASE_URL \
-        --dart-define=AI_API_KEY=$AI_API_KEY
-
-# View wear logs
-wear-logs:
-    adb logcat | grep -E "(BroWear|flutter|Fatal|FATAL|Exception)"
-
-# ─────────────────────────────────────────────────────────────
-# App (unified bro app - Linux + Android)
-# ─────────────────────────────────────────────────────────────
-
-# Clean app build cache
-clean-app:
-    cd app && flutter clean
-
-# Run app on Linux desktop (connects to remote server)
-app:
-    cd app && flutter run -d linux \
-        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
-        --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
-        --dart-define=AI_BASE_URL=$AI_BASE_URL \
-        --dart-define=AI_API_KEY=$AI_API_KEY
-
-# Run app on Android emulator
-app-android:
+# Build app (linux, android, android-prod, wear)
+build target:
     #!/usr/bin/env bash
-    device=$(adb devices | grep emulator | head -1 | cut -f1)
-    if [ -z "$device" ]; then
-        echo "No emulator found. Run 'just emu-phone' first."
-        exit 1
-    fi
-    cd app && flutter run -d "$device"
-
-# Run app on real Android device (A065)
-app-device:
-    #!/usr/bin/env bash
-    device=$(flutter devices 2>/dev/null | grep "A065" | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
-    if [ -z "$device" ]; then
-        echo "No A065 device found. Connect via Wireless debugging."
-        exit 1
-    fi
-    echo "Running on device: $device"
-    cd app && flutter run -d "$device"
-
-# Build Linux desktop app
-app-build-linux:
-    cd app && flutter build linux
-
-# Build Android APK (release, localhost)
-app-build-android:
-    cd app && flutter build apk --flavor phone
-
-# Build Android APK for production (requires BRO_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env)
-app-build-android-prod:
-    cd app && flutter build apk --flavor phone \
-        --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
-        --dart-define=LIVEKIT_HTTP_URL=https://$BRO_HOST \
+    DEFS="--dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
         --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
         --dart-define=AI_BASE_URL=$AI_BASE_URL \
-        --dart-define=AI_API_KEY=$AI_API_KEY
+        --dart-define=AI_API_KEY=$AI_API_KEY"
+    case "{{target}}" in
+        linux)
+            cd app && flutter build linux
+            ;;
+        android)
+            cd app && flutter build apk --flavor phone
+            ;;
+        android-prod)
+            cd app && flutter build apk --flavor phone $DEFS \
+                --dart-define=LIVEKIT_HTTP_URL=https://$BRO_HOST
+            ;;
+        wear)
+            cd app && flutter build apk --flavor wear -t lib/main_wear.dart $DEFS
+            ;;
+        *)
+            echo "Unknown target: {{target}}. Use linux, android, android-prod, or wear."
+            exit 1
+            ;;
+    esac
 
 # Build and deploy phone APK to pCloud
-deploy-phone: app-build-android-prod
+deploy: (build "android-prod")
     cp app/build/app/outputs/flutter-apk/app-phone-release.apk ~/pCloudDrive/android-apps/bro/
 
 # ─────────────────────────────────────────────────────────────
@@ -160,75 +142,59 @@ restart process:
 status:
     pm2 status
 
-# View logs for a specific process (e.g., just logs agent)
-logs process:
-    pm2 logs {{process}}
-
-# View all logs
-logs-all:
-    pm2 logs
+# View pm2 logs (optionally for a specific process)
+logs process='':
+    #!/usr/bin/env bash
+    if [ -z "{{process}}" ]; then
+        pm2 logs
+    else
+        pm2 logs "{{process}}"
+    fi
 
 # ─────────────────────────────────────────────────────────────
 # Dev
 # ─────────────────────────────────────────────────────────────
 
-# Get all dependencies
+# Get all dependencies (flutter + python)
 deps:
     cd app && flutter pub get
+    uv sync --group dev
 
 # Clean builds
 clean:
     cd app && flutter clean
 
-# Lint
+# Lint (dart + python)
 lint:
     cd app && flutter analyze
     uv run ruff check agent
 
-# Format code
+# Format code (dart + python)
 fmt:
     cd app && dart format lib/
     uv run ruff format agent
 
-# ─────────────────────────────────────────────────────────────
-# Python (shared monorepo)
-# ─────────────────────────────────────────────────────────────
-
-# Sync all Python dependencies
-deps-py:
-    uv sync --group dev
-
-# Lint Python code
-lint-py:
-    uv run ruff check agent
-
 # Auto-fix Python lint issues
-fix-py:
+fix:
     uv run ruff check agent --fix
 
 # Type check Python code
-typecheck-py:
+typecheck:
     uv run ty check agent
-
-# Run all Python checks (lint + typecheck)
-check-py:
-    uv run ruff check agent && uv run ty check agent
 
 # ─────────────────────────────────────────────────────────────
 # Frontend (lives in ../my-agents/frontend)
 # ─────────────────────────────────────────────────────────────
 
-# Run frontend dev server
-fe:
-    cd ../my-agents/frontend && npm run dev
-
-# Build frontend for production
-fe-build:
-    cd ../my-agents/frontend && npm run build
-
-# Install frontend dependencies
-fe-deps:
-    cd ../my-agents/frontend && npm install
+# Frontend (dev, build, deps)
+fe cmd='dev':
+    #!/usr/bin/env bash
+    case "{{cmd}}" in
+        dev)   cd ../my-agents/frontend && npm run dev ;;
+        build) cd ../my-agents/frontend && npm run build ;;
+        deps)  cd ../my-agents/frontend && npm install ;;
+        *) echo "Unknown command: {{cmd}}. Use dev, build, or deps." && exit 1 ;;
+    esac
 
 # Run both AI server and frontend (requires parallel execution)
 dev:
