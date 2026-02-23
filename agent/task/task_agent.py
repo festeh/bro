@@ -16,13 +16,13 @@ if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from my_agents.llm_logging import get_llm_callbacks
+from my_agents.models_config import create_chat_llm
 from pydantic import BaseModel, Field
 
 from agent.constants import MAX_CLI_RETRIES
-from agent.task.dimaist_cli import DimaistCLI
 from agent.result import Err, Ok, Result
-from my_agents.llm_logging import get_llm_callbacks
-from my_agents.models_config import create_chat_llm, get_llm_by_model_id
+from agent.task.dimaist_cli import DimaistCLI
 
 logger = logging.getLogger("task-agent")
 
@@ -136,8 +136,6 @@ class TaskAgent:
         Raises:
             ValueError: If model_id is not found in models.json
         """
-        if not get_llm_by_model_id(model_id):
-            raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
         self._session_id = session_id
         self._cli = DimaistCLI(cli_path)  # DimaistCLI reads from env if None
         self._state = TaskAgentState(session_id=session_id)
@@ -181,13 +179,7 @@ class TaskAgent:
         return self._model_id
 
     def set_model(self, model_id: str) -> None:
-        """Change model. Keeps conversation history.
-
-        Raises:
-            ValueError: If model_id is not found in models.json
-        """
-        if not get_llm_by_model_id(model_id):
-            raise ValueError(f"Unknown model_id: {model_id!r}. Check models.json configuration.")
+        """Change model. Keeps conversation history."""
         self._model_id = model_id
 
     async def confirm(self) -> AgentResponse:

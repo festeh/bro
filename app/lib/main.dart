@@ -57,8 +57,8 @@ void main() async {
   // Initialize media_kit for audio playback
   MediaKit.ensureInitialized();
 
-  // Load model configuration from asset
-  await ModelsConfig.load();
+  // Initialize model configuration (loads cache, triggers async refresh)
+  await ModelsConfig.instance.init();
 
   // Recordings directory - platform-specific
   final recordingsDir = await _getRecordingsDir();

@@ -26,8 +26,8 @@ void main() async {
     print('${record.level.name}: ${record.loggerName}: ${record.message}');
   });
 
-  // Load model configuration
-  await ModelsConfig.load();
+  // Initialize model configuration (loads cache, triggers async refresh)
+  await ModelsConfig.instance.init();
 
   // Initialize settings (generates persistent device ID)
   final settingsService = SettingsService();

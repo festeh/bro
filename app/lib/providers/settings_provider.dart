@@ -7,7 +7,7 @@ import '../services/settings_service.dart';
 
 class SettingsState {
   final SttProvider sttProvider;
-  final Model llmModel;
+  final LlmModel llmModel;
   final bool ttsEnabled;
   final Set<String> excludedAgents;
 
@@ -20,7 +20,7 @@ class SettingsState {
 
   SettingsState copyWith({
     SttProvider? sttProvider,
-    Model? llmModel,
+    LlmModel? llmModel,
     bool? ttsEnabled,
     Set<String>? excludedAgents,
   }) {
@@ -37,14 +37,14 @@ class SettingsState {
       identical(this, other) ||
       other is SettingsState &&
           sttProvider == other.sttProvider &&
-          llmModel.modelId == other.llmModel.modelId &&
+          llmModel.id == other.llmModel.id &&
           ttsEnabled == other.ttsEnabled &&
           setEquals(excludedAgents, other.excludedAgents);
 
   @override
   int get hashCode => Object.hash(
         sttProvider,
-        llmModel.modelId,
+        llmModel.id,
         ttsEnabled,
         Object.hashAll(excludedAgents.toList()..sort()),
       );
@@ -89,7 +89,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
     ref.read(settingsServiceProvider).setSttProvider(provider);
   }
 
-  void setLlmModel(Model model) {
+  void setLlmModel(LlmModel model) {
     state = state.copyWith(llmModel: model);
     ref.read(liveKitServiceProvider).setLlmModel(model);
     ref.read(settingsServiceProvider).setLlmModel(model);

@@ -1,16 +1,27 @@
-"""Model list for the test stand - loaded from central models.json."""
+"""Model configuration for the test stand."""
 
-from my_agents.models_config import Model, get_default_llm, get_llm_by_index, get_llm_models
+from dataclasses import dataclass
 
-# Re-export for backwards compatibility
-MODELS = get_llm_models()
+
+@dataclass
+class Model:
+    """Simple model reference for the test stand UI."""
+
+    model_id: str
+    display_name: str
+
+
+# Static list of commonly used models for cycling in the TUI.
+MODELS = [
+    Model(model_id="default", display_name="default"),
+    Model(model_id="qwen/qwen3-32b", display_name="qwen3-32b"),
+    Model(model_id="moonshotai/kimi-k2-instruct", display_name="kimi-k2-instruct"),
+]
 
 
 def get_model_by_index(index: int) -> Model:
-    """Get model by index, wrapping around."""
-    return get_llm_by_index(index)
+    return MODELS[index % len(MODELS)]
 
 
 def get_default_model() -> Model:
-    """Get the default model (first in list)."""
-    return get_default_llm()
+    return MODELS[0]

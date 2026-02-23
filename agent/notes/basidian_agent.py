@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -20,11 +19,11 @@ if TYPE_CHECKING:
 from basidian.client import BasidianClient
 from basidian.plugins.daily_notes import DailyNotes
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from my_agents.llm_logging import get_llm_callbacks
+from my_agents.models_config import create_chat_llm
 from pydantic import BaseModel, Field
 
 from agent.constants import get_basidian_url
-from my_agents.llm_logging import get_llm_callbacks
-from my_agents.models_config import create_chat_llm, get_llm_by_model_id
 
 logger = logging.getLogger("basidian-agent")
 
@@ -148,8 +147,6 @@ class BasidianAgent:
     """Notes agent using BasidianClient HTTP API."""
 
     def __init__(self, session_id: str, model_id: str) -> None:
-        if not get_llm_by_model_id(model_id):
-            raise ValueError(f"Unknown model_id: {model_id!r}")
         self._session_id = session_id
         self._model_id = model_id
         self._base_url = get_basidian_url()
@@ -166,8 +163,6 @@ class BasidianAgent:
         self._state.active = False
 
     def set_model(self, model_id: str) -> None:
-        if not get_llm_by_model_id(model_id):
-            raise ValueError(f"Unknown model_id: {model_id!r}")
         self._model_id = model_id
 
     async def process_message(self, user_message: str) -> AgentResponse:

@@ -37,7 +37,7 @@ devices:
 # ─────────────────────────────────────────────────────────────
 
 # Run wear app on emulator (finds first emulator device)
-wear: sync-models
+wear:
     #!/usr/bin/env bash
     device=$(adb devices | grep emulator | head -1 | cut -f1)
     if [ -z "$device" ]; then
@@ -47,7 +47,7 @@ wear: sync-models
     cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device"
 
 # Run wear app on real Samsung watch (SM-* device)
-wear-device: sync-models
+wear-device:
     #!/usr/bin/env bash
     device=$(flutter devices 2>/dev/null | grep "SM " | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
     if [ -z "$device" ]; then
@@ -58,14 +58,18 @@ wear-device: sync-models
     cd app && flutter run --flavor wear -t lib/main_wear.dart -d "$device" \
         --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
+        --dart-define=AI_BASE_URL=$AI_BASE_URL \
+        --dart-define=AI_API_KEY=$AI_API_KEY
 
 # Build wear release APK
-wear-build: sync-models
+wear-build:
     cd app && flutter build apk --flavor wear -t lib/main_wear.dart \
         --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
+        --dart-define=AI_BASE_URL=$AI_BASE_URL \
+        --dart-define=AI_API_KEY=$AI_API_KEY
 
 # View wear logs
 wear-logs:
@@ -75,25 +79,21 @@ wear-logs:
 # App (unified bro app - Linux + Android)
 # ─────────────────────────────────────────────────────────────
 
-# Sync models.json to app assets
-sync-models:
-    mkdir -p app/assets
-    cp ../my-agents/models.json app/assets/models.json
-    @echo "Synced models.json to app/assets/"
-
 # Clean app build cache
 clean-app:
     cd app && flutter clean
 
 # Run app on Linux desktop (connects to remote server)
-app: sync-models
+app:
     cd app && flutter run -d linux \
         --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
+        --dart-define=AI_BASE_URL=$AI_BASE_URL \
+        --dart-define=AI_API_KEY=$AI_API_KEY
 
 # Run app on Android emulator
-app-android: sync-models
+app-android:
     #!/usr/bin/env bash
     device=$(adb devices | grep emulator | head -1 | cut -f1)
     if [ -z "$device" ]; then
@@ -103,7 +103,7 @@ app-android: sync-models
     cd app && flutter run -d "$device"
 
 # Run app on real Android device (A065)
-app-device: sync-models
+app-device:
     #!/usr/bin/env bash
     device=$(flutter devices 2>/dev/null | grep "A065" | grep -oP '(?<=• )[^ ]+(?= •)' | head -1)
     if [ -z "$device" ]; then
@@ -114,20 +114,22 @@ app-device: sync-models
     cd app && flutter run -d "$device"
 
 # Build Linux desktop app
-app-build-linux: sync-models
+app-build-linux:
     cd app && flutter build linux
 
 # Build Android APK (release, localhost)
-app-build-android: sync-models
+app-build-android:
     cd app && flutter build apk --flavor phone
 
 # Build Android APK for production (requires BRO_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env)
-app-build-android-prod: sync-models
+app-build-android-prod:
     cd app && flutter build apk --flavor phone \
         --dart-define=LIVEKIT_URL=wss://$BRO_HOST \
         --dart-define=LIVEKIT_HTTP_URL=https://$BRO_HOST \
         --dart-define=LIVEKIT_API_KEY=$BRO_LIVEKIT_API_KEY \
-        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET
+        --dart-define=LIVEKIT_API_SECRET=$BRO_LIVEKIT_API_SECRET \
+        --dart-define=AI_BASE_URL=$AI_BASE_URL \
+        --dart-define=AI_API_KEY=$AI_API_KEY
 
 # Build and deploy phone APK to pCloud
 deploy-phone: app-build-android-prod

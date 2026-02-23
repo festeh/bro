@@ -1,138 +1,198 @@
-/// Centralized model configuration loaded from models.json asset.
+/// Dynamic model configuration fetched from AI API.
 library;
 
 import 'dart:convert';
 
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Provider configuration.
-class ModelProvider {
+const _cacheKey = 'cached_llm_models';
+const _defaultModel = LlmModel(id: 'default', name: 'default', ownedBy: '');
+
+const _aiBaseUrl = String.fromEnvironment(
+  'AI_BASE_URL',
+  defaultValue: 'https://ai.dimalip.in/v1',
+);
+
+const _aiApiKey = String.fromEnvironment('AI_API_KEY', defaultValue: '');
+
+/// Single LLM model from /v1/models.
+class LlmModel {
+  final String id;
   final String name;
-  final String? baseUrl;
-  final String apiKeyEnv;
+  final String ownedBy;
 
-  const ModelProvider({required this.name, this.baseUrl, required this.apiKeyEnv});
-
-  factory ModelProvider.fromJson(String name, Map<String, dynamic> json) {
-    return ModelProvider(
-      name: name,
-      baseUrl: json['base_url'] as String?,
-      apiKeyEnv: json['api_key_env'] as String,
-    );
-  }
-}
-
-/// Model configuration.
-class Model {
-  final String name;
-  final String provider;
-  final String modelId;
-
-  const Model({
+  const LlmModel({
+    required this.id,
     required this.name,
-    required this.provider,
-    required this.modelId,
+    required this.ownedBy,
   });
 
-  factory Model.fromJson(Map<String, dynamic> json) {
-    return Model(
-      name: json['name'] as String,
-      provider: json['provider'] as String,
-      modelId: json['model_id'] as String,
+  factory LlmModel.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    return LlmModel(
+      id: id,
+      name: _displayName(id),
+      ownedBy: json['owned_by'] as String? ?? '',
     );
   }
 
-  /// Display name with provider prefix.
-  String get displayName => '$provider/$name';
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'owned_by': ownedBy,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is LlmModel && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  /// Clean up model ID for display: strip known prefixes and -TEE suffix.
+  static String _displayName(String id) {
+    var name = id;
+    // Strip org prefixes like "deepseek-ai/", "moonshotai/", etc.
+    final slash = name.lastIndexOf('/');
+    if (slash >= 0) {
+      name = name.substring(slash + 1);
+    }
+    // Strip -TEE suffix
+    if (name.endsWith('-TEE')) {
+      name = name.substring(0, name.length - 4);
+    }
+    return name;
+  }
 }
 
-/// Singleton holding loaded model configuration.
-class ModelsConfig {
+/// Groups models by owned_by for display.
+class ModelGroup {
+  final String provider;
+  final List<LlmModel> models;
+
+  const ModelGroup({required this.provider, required this.models});
+}
+
+/// Singleton holding the dynamic model list.
+/// Call [init] at startup, then [refresh] fires in the background.
+class ModelsConfig extends ChangeNotifier {
   static ModelsConfig? _instance;
 
-  final Map<String, ModelProvider> providers;
-  final List<Model> llmModels;
-  final List<Model> asrModels;
-  final List<Model> ttsModels;
+  List<LlmModel> _llmModels = [_defaultModel];
 
-  ModelsConfig._({
-    required this.providers,
-    required this.llmModels,
-    required this.asrModels,
-    required this.ttsModels,
-  });
+  ModelsConfig._();
 
-  /// Load configuration from asset. Call once at app startup.
-  static Future<void> load() async {
-    if (_instance != null) return;
-
-    final jsonString = await rootBundle.loadString('assets/models.json');
-    final json = jsonDecode(jsonString) as Map<String, dynamic>;
-
-    // Parse providers
-    final providersJson = json['providers'] as Map<String, dynamic>;
-    final providers = <String, ModelProvider>{};
-    for (final entry in providersJson.entries) {
-      providers[entry.key] = ModelProvider.fromJson(
-        entry.key,
-        entry.value as Map<String, dynamic>,
-      );
-    }
-
-    // Parse models
-    final llmJson = json['llm'] as List<dynamic>;
-    final llmModels = llmJson
-        .map((m) => Model.fromJson(m as Map<String, dynamic>))
-        .toList();
-
-    final asrJson = json['asr'] as List<dynamic>;
-    final asrModels = asrJson
-        .map((m) => Model.fromJson(m as Map<String, dynamic>))
-        .toList();
-
-    final ttsJson = json['tts'] as List<dynamic>;
-    final ttsModels = ttsJson
-        .map((m) => Model.fromJson(m as Map<String, dynamic>))
-        .toList();
-
-    _instance = ModelsConfig._(
-      providers: providers,
-      llmModels: llmModels,
-      asrModels: asrModels,
-      ttsModels: ttsModels,
-    );
-  }
-
-  /// Get the loaded instance. Throws if not loaded.
   static ModelsConfig get instance {
-    if (_instance == null) {
-      throw StateError(
-        'ModelsConfig not loaded. Call ModelsConfig.load() first.',
-      );
-    }
+    _instance ??= ModelsConfig._();
     return _instance!;
   }
 
-  /// Get provider by name.
-  ModelProvider getProvider(String name) {
-    final provider = providers[name];
-    if (provider == null) {
-      throw ArgumentError('Unknown provider: $name');
+  /// All available LLM models.
+  List<LlmModel> get llmModels => _llmModels;
+
+  /// Default model.
+  LlmModel get defaultLlm => _llmModels.first;
+
+  /// Get model by ID, or null if not found.
+  LlmModel? getLlmById(String id) {
+    for (final m in _llmModels) {
+      if (m.id == id) return m;
     }
-    return provider;
+    return null;
   }
 
-  /// Get LLM model by index, wrapping around.
-  Model getLlmByIndex(int index) {
-    return llmModels[index % llmModels.length];
+  /// Models grouped by owned_by, sorted. "default" model at top as its own group.
+  List<ModelGroup> get groupedModels {
+    final groups = <String, List<LlmModel>>{};
+    final topLevel = <LlmModel>[];
+
+    for (final m in _llmModels) {
+      if (m.id == 'default') {
+        topLevel.add(m);
+      } else if (m.ownedBy.isNotEmpty) {
+        groups.putIfAbsent(m.ownedBy, () => []).add(m);
+      } else {
+        topLevel.add(m);
+      }
+    }
+
+    final result = <ModelGroup>[];
+
+    if (topLevel.isNotEmpty) {
+      result.add(ModelGroup(provider: '', models: topLevel));
+    }
+
+    final sortedKeys = groups.keys.toList()..sort();
+    for (final key in sortedKeys) {
+      final models = groups[key]!..sort((a, b) => a.name.compareTo(b.name));
+      result.add(ModelGroup(provider: key, models: models));
+    }
+
+    return result;
   }
 
-  /// Get default LLM model (first in list).
-  Model get defaultLlm => llmModels.first;
+  /// Initialize with cached data, then trigger background refresh.
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_cacheKey);
+    if (cached != null) {
+      try {
+        final list = (jsonDecode(cached) as List)
+            .map((e) => LlmModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        if (list.isNotEmpty) {
+          _llmModels = list;
+          notifyListeners();
+        }
+      } catch (e) {
+        debugPrint('Failed to load cached models: $e');
+      }
+    }
 
-  /// Get default ASR model (first in list).
-  Model get defaultAsr => asrModels.first;
+    // Fire-and-forget refresh
+    refresh();
+  }
 
-  /// Get default TTS model (first in list).
-  Model get defaultTts => ttsModels.first;
+  /// Fetch model list from API and update cache.
+  Future<void> refresh() async {
+    try {
+      final uri = Uri.parse('$_aiBaseUrl/models');
+      final response = await http.get(uri, headers: {
+        if (_aiApiKey.isNotEmpty) 'Authorization': 'Bearer $_aiApiKey',
+      });
+
+      if (response.statusCode != 200) {
+        debugPrint('Models API returned ${response.statusCode}');
+        return;
+      }
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = json['data'] as List<dynamic>;
+
+      final models = data
+          .map((e) => LlmModel.fromJson(e as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => a.id.compareTo(b.id));
+
+      // Ensure "default" is always first
+      final defaultIdx = models.indexWhere((m) => m.id == 'default');
+      if (defaultIdx > 0) {
+        final d = models.removeAt(defaultIdx);
+        models.insert(0, d);
+      } else if (defaultIdx < 0) {
+        models.insert(0, _defaultModel);
+      }
+
+      _llmModels = models;
+      notifyListeners();
+
+      // Cache
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(models.map((m) => m.toJson()).toList());
+      await prefs.setString(_cacheKey, encoded);
+    } catch (e) {
+      debugPrint('Failed to fetch models: $e');
+    }
+  }
 }

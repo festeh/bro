@@ -39,18 +39,20 @@ class SettingsService {
     await _prefs.setString(_keySttProvider, provider.name);
   }
 
-  // LLM Model (stored by modelId)
-  Model get llmModel {
-    final modelId = _prefs.getString(_keyLlmModelId);
-    if (modelId == null) return ModelsConfig.instance.defaultLlm;
-    return ModelsConfig.instance.llmModels.firstWhere(
-      (m) => m.modelId == modelId,
-      orElse: () => ModelsConfig.instance.defaultLlm,
-    );
+  // LLM Model ID (string)
+  String get llmModelId {
+    return _prefs.getString(_keyLlmModelId) ?? 'default';
   }
 
-  Future<void> setLlmModel(Model model) async {
-    await _prefs.setString(_keyLlmModelId, model.modelId);
+  /// Resolve stored model ID to an LlmModel. Falls back to default if not found.
+  LlmModel get llmModel {
+    final id = llmModelId;
+    return ModelsConfig.instance.getLlmById(id) ??
+        ModelsConfig.instance.defaultLlm;
+  }
+
+  Future<void> setLlmModel(LlmModel model) async {
+    await _prefs.setString(_keyLlmModelId, model.id);
   }
 
   // TTS Enabled

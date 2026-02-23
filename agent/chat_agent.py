@@ -9,6 +9,9 @@ from livekit import rtc
 from livekit.agents import Agent, StopResponse, llm
 from livekit.agents.voice import ModelSettings
 from livekit.plugins import elevenlabs
+from my_agents.graph import classify_intent
+from my_agents.models import Intent
+from my_agents.models_config import create_chat_llm
 
 from agent.constants import (
     ATTR_INTENT,
@@ -30,9 +33,6 @@ from agent.settings import (
     create_stt,
 )
 from agent.task.task_agent import TaskAgent
-from my_agents.graph import classify_intent
-from my_agents.models import Intent
-from my_agents.models_config import create_chat_llm
 
 logger = logging.getLogger("voice-agent")
 
@@ -314,12 +314,7 @@ class ChatAgent(Agent):
 
     async def _generate_llm(self, user_input: str) -> AsyncIterable[str]:
         """Generate response chunks from LLM."""
-        try:
-            llm_client = create_chat_llm(self._settings.llm_model)
-        except ValueError:
-            logger.error(f"Unknown model: {self._settings.llm_model}")
-            yield f"Error: Unknown model '{self._settings.llm_model}'. Check configuration."
-            return
+        llm_client = create_chat_llm(self._settings.llm_model)
 
         async for chunk in llm_client.astream([("user", user_input)]):
             if chunk.content and isinstance(chunk.content, str):

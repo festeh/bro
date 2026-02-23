@@ -76,12 +76,9 @@ class AppSidebar extends ConsumerWidget {
                   itemLabel: _sttProviderLabel,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
-                _SettingDropdown<Model>(
-                  label: 'LLM',
-                  value: settings.llmModel,
-                  items: ModelsConfig.instance.llmModels,
+                _LlmSelector(
+                  current: settings.llmModel,
                   onChanged: notifier.setLlmModel,
-                  itemLabel: (m) => m.displayName,
                 ),
                 const SizedBox(height: AppTokens.spacingSm),
                 _SettingToggle(
@@ -386,6 +383,214 @@ class _AgentRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LlmSelector extends StatelessWidget {
+  final LlmModel current;
+  final ValueChanged<LlmModel> onChanged;
+
+  const _LlmSelector({required this.current, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'LLM',
+          style: TextStyle(
+            color: AppTokens.textTertiary,
+            fontSize: AppTokens.fontSizeXs,
+            fontWeight: AppTokens.fontWeightMedium,
+          ),
+        ),
+        const SizedBox(height: AppTokens.spacingXs),
+        GestureDetector(
+          onTap: () => showLlmModelPicker(
+            context,
+            current: current,
+            onSelected: onChanged,
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.spacingSm,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppTokens.backgroundTertiary,
+              borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    current.name,
+                    style: const TextStyle(
+                      color: AppTokens.textPrimary,
+                      fontSize: AppTokens.fontSizeXs,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(
+                  Icons.expand_more,
+                  color: AppTokens.textSecondary,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Show a dialog to pick an LLM model, grouped by provider.
+void showLlmModelPicker(
+  BuildContext context, {
+  required LlmModel current,
+  required ValueChanged<LlmModel> onSelected,
+}) {
+  showDialog(
+    context: context,
+    builder: (context) => _LlmModelPickerDialog(
+      current: current,
+      onSelected: (model) {
+        onSelected(model);
+        Navigator.of(context).pop();
+      },
+    ),
+  );
+}
+
+class _LlmModelPickerDialog extends StatelessWidget {
+  final LlmModel current;
+  final ValueChanged<LlmModel> onSelected;
+
+  const _LlmModelPickerDialog({
+    required this.current,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = ModelsConfig.instance.groupedModels;
+
+    return Dialog(
+      backgroundColor: AppTokens.backgroundSecondary,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320, maxHeight: 480),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'LLM Model',
+                style: TextStyle(
+                  color: AppTokens.textPrimary,
+                  fontSize: AppTokens.fontSizeMd,
+                  fontWeight: AppTokens.fontWeightMedium,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.only(bottom: 8),
+                itemCount: groups.fold<int>(
+                  0,
+                  (sum, g) =>
+                      sum + g.models.length + (g.provider.isNotEmpty ? 1 : 0),
+                ),
+                itemBuilder: (context, index) {
+                  var offset = 0;
+                  for (final group in groups) {
+                    final hasHeader = group.provider.isNotEmpty;
+                    if (hasHeader) {
+                      if (index == offset) {
+                        return _GroupHeader(label: group.provider);
+                      }
+                      offset++;
+                    }
+                    if (index < offset + group.models.length) {
+                      final model = group.models[index - offset];
+                      return _ModelTile(
+                        model: model,
+                        isSelected: model.id == current.id,
+                        onTap: () => onSelected(model),
+                      );
+                    }
+                    offset += group.models.length;
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupHeader extends StatelessWidget {
+  final String label;
+  const _GroupHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: AppTokens.textTertiary.withValues(alpha: 0.7),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _ModelTile extends StatelessWidget {
+  final LlmModel model;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ModelTile({
+    required this.model,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: isSelected
+            ? AppTokens.accentPrimary.withValues(alpha: 0.15)
+            : Colors.transparent,
+        child: Text(
+          model.name,
+          style: TextStyle(
+            color: isSelected ? AppTokens.accentPrimary : AppTokens.textPrimary,
+            fontSize: AppTokens.fontSizeSm,
+          ),
         ),
       ),
     );

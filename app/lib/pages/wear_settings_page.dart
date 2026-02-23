@@ -69,7 +69,7 @@ class WearSettingsPage extends ConsumerWidget {
               onTap: () {
                 final models = ModelsConfig.instance.llmModels;
                 final currentIdx =
-                    models.indexWhere((m) => m.modelId == settings.llmModel.modelId);
+                    models.indexWhere((m) => m.id == settings.llmModel.id);
                 final next = models[(currentIdx + 1) % models.length];
                 notifier.setLlmModel(next);
               },

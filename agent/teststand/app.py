@@ -4,6 +4,8 @@ import asyncio
 import uuid
 from typing import Any
 
+from my_agents.graph import classify_intent
+from my_agents.models import Intent
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -12,8 +14,6 @@ from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static
 
 from agent.task.task_agent import AgentResponse, TaskAgent
-from my_agents.graph import classify_intent
-from my_agents.models import Intent
 
 from .logging import get_log_file_path, set_log_level, setup_file_logging, tail_log_file
 from .models import MODELS, Model, get_default_model, get_model_by_index

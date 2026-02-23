@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/models_config.dart';
 import '../providers/settings_provider.dart';
+import 'app_sidebar.dart' show showLlmModelPicker;
 import '../services/livekit_service.dart';
 import '../theme/tokens.dart';
 
@@ -70,26 +70,33 @@ class SettingsSheet extends ConsumerWidget {
             const SizedBox(height: AppTokens.spacingMd),
             _SettingRow(
               label: 'LLM Model',
-              child: DropdownButton<Model>(
-                value: settings.llmModel,
-                dropdownColor: AppTokens.backgroundTertiary,
-                style: const TextStyle(
-                  color: AppTokens.textPrimary,
-                  fontSize: AppTokens.fontSizeMd,
-                ),
-                underline: const SizedBox(),
-                items: ModelsConfig.instance.llmModels.map((model) {
-                  return DropdownMenuItem(
-                    value: model,
-                    child: Text(model.displayName),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  showLlmModelPicker(
+                    context,
+                    current: settings.llmModel,
+                    onSelected: notifier.setLlmModel,
                   );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    notifier.setLlmModel(value);
-                    Navigator.pop(context);
-                  }
                 },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      settings.llmModel.name,
+                      style: const TextStyle(
+                        color: AppTokens.textPrimary,
+                        fontSize: AppTokens.fontSizeMd,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.expand_more,
+                      color: AppTokens.textSecondary,
+                      size: 18,
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: AppTokens.spacingMd),

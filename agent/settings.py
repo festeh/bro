@@ -6,8 +6,7 @@ from typing import Any
 
 from livekit.agents import JobContext
 from livekit.plugins import deepgram, elevenlabs, openai
-
-from my_agents.models_config import get_default_llm, get_llm_by_model_id
+from my_agents.models_config import AI_API_KEY, AI_BASE_URL, DEFAULT_MODEL
 
 # Session inactivity timeout
 SESSION_TIMEOUT = 60.0  # seconds without completed turn
@@ -30,7 +29,7 @@ class AgentSettings:
     """Configuration for agent behavior."""
 
     stt_provider: str = "deepgram"
-    llm_model: str = field(default_factory=lambda: get_default_llm().model_id)
+    llm_model: str = DEFAULT_MODEL
     tts_enabled: bool = True
     agent_mode: str = "chat"
     excluded_agents: list[str] = field(default_factory=list)
@@ -39,7 +38,7 @@ class AgentSettings:
     def from_dict(cls, d: dict[str, Any]) -> "AgentSettings":
         return cls(
             stt_provider=d.get("stt_provider", "deepgram"),
-            llm_model=d.get("llm_model", get_default_llm().model_id),
+            llm_model=d.get("llm_model", DEFAULT_MODEL),
             tts_enabled=d.get("tts_enabled", True),
             agent_mode=d.get("agent_mode", "chat"),
             excluded_agents=d.get("excluded_agents", []),
@@ -53,19 +52,12 @@ def create_stt(provider: str):
     return deepgram.STT(model="nova-3")
 
 
-def create_llm(model_id: str) -> openai.LLM | None:
-    """Create LLM instance from model_id. Returns None if model not found."""
-    model = get_llm_by_model_id(model_id)
-    if not model:
-        logger.error(f"Unknown model: {model_id}. Check models.json configuration.")
-        return None
-
+def create_llm(model_id: str) -> openai.LLM:
+    """Create LLM instance from model_id."""
     return openai.LLM(
-        model=model.model_id,
-        base_url=model.base_url,  # pyright: ignore[reportArgumentType]
-        api_key=model.api_key,
-        extra_headers=model.headers or {},  # pyright: ignore[reportArgumentType]
-        extra_body=model.extra_body or {},  # pyright: ignore[reportArgumentType]
+        model=model_id,
+        base_url=AI_BASE_URL,
+        api_key=AI_API_KEY,
     )
 
 
