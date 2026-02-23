@@ -22,10 +22,13 @@ dependencies = [
     "aiofiles>=24.0.0",
     # AI logic (editable)
     "my-agents",
+    # Basidian client (editable)
+    "basidian",
 ]
 
 [tool.uv.sources]
 my-agents = { path = "../my-agents", editable = true }
+basidian = { path = "../basidian", editable = true }
 
 [dependency-groups]
 dev = [
