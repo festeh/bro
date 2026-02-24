@@ -18,6 +18,10 @@ class AssistantService {
     return result ?? 'unavailable';
   }
 
+  Future<void> openAssistantSettings() async {
+    await _channel.invokeMethod('openAssistantSettings');
+  }
+
   /// Stream that emits when the assistant is triggered while the app is already running.
   Stream<void> get onAssistTriggered {
     _assistStream ??= _eventChannel.receiveBroadcastStream().map((_) {});

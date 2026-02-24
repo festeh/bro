@@ -93,6 +93,17 @@ void main() async {
   final launchedFromAssist =
       Platform.isAndroid ? await assistantService.checkAssistLaunch() : false;
 
+  // Ensure the app is registered as the default digital assistant
+  if (Platform.isAndroid) {
+    final roleResult = await assistantService.requestDefaultRole();
+    if (roleResult == 'misconfigured') {
+      // Role is held but voice_interaction_service not set.
+      // Open system settings so the user can re-select bro as assistant,
+      // which properly configures the system.
+      assistantService.openAssistantSettings();
+    }
+  }
+
   runApp(
     ProviderScope(
       overrides: [
