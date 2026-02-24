@@ -11,6 +11,7 @@ import '../models/recording.dart';
 import '../providers/livekit_providers.dart';
 import '../providers/settings_provider.dart';
 import '../providers/storage_providers.dart';
+import '../services/assistant_service.dart';
 import '../services/egress_service.dart';
 import '../services/livekit_service.dart';
 import '../services/waveform_service.dart';
@@ -28,10 +29,14 @@ final _log = Logger('HomePage');
 
 class HomePage extends ConsumerStatefulWidget {
   final EgressService egressService;
+  final AssistantService assistantService;
+  final bool launchedFromAssist;
 
   const HomePage({
     super.key,
     required this.egressService,
+    required this.assistantService,
+    this.launchedFromAssist = false,
   });
 
   @override
@@ -57,6 +62,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<bool>? _playingStateSub;
+  StreamSubscription<void>? _assistSub;
+  bool _assistAutoStartDone = false;
 
   @override
   void initState() {
@@ -64,6 +71,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     _player = Player();
     _initPlayer();
     _connectToLiveKit();
+    _initAssistant();
+  }
+
+  void _initAssistant() {
+    // Listen for assist triggers while app is already running
+    _assistSub = widget.assistantService.onAssistTriggered.listen((_) {
+      if (!_isRecording && !_isLoading) {
+        _toggleRecording();
+      }
+    });
   }
 
   void _initPlayer() {
@@ -235,6 +252,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
+    _assistSub?.cancel();
     _positionSub?.cancel();
     _playingStateSub?.cancel();
     _player.stop();
@@ -263,6 +281,18 @@ class _HomePageState extends ConsumerState<HomePage> {
         ConnectionStatus.disconnected;
     final isAgentConnected = agentConnectedAsync.value ?? false;
     final recordings = recordingsAsync.value ?? [];
+
+    // Auto-start voice session when launched from assistant trigger
+    if (widget.launchedFromAssist &&
+        !_assistAutoStartDone &&
+        connectionStatus == ConnectionStatus.connected &&
+        !_isRecording &&
+        !_isLoading) {
+      _assistAutoStartDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _toggleRecording();
+      });
+    }
 
     // Listen to transcription events for recording mode
     ref.listen(transcriptionProvider, (_, next) {

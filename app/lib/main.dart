@@ -13,6 +13,7 @@ import 'models/models_config.dart';
 import 'pages/home_page.dart';
 import 'providers/settings_provider.dart';
 import 'providers/storage_providers.dart';
+import 'services/assistant_service.dart';
 import 'services/egress_service.dart';
 import 'services/livekit_service.dart';
 import 'services/settings_service.dart';
@@ -78,6 +79,11 @@ void main() async {
 
   await storageService.init();
 
+  // Check if launched from Android assistant trigger
+  final assistantService = AssistantService();
+  final launchedFromAssist =
+      Platform.isAndroid ? await assistantService.checkAssistLaunch() : false;
+
   runApp(
     ProviderScope(
       overrides: [
@@ -89,6 +95,8 @@ void main() async {
         liveKitService: liveKitService,
         storageService: storageService,
         egressService: egressService,
+        assistantService: assistantService,
+        launchedFromAssist: launchedFromAssist,
       ),
     ),
   );
@@ -114,12 +122,16 @@ class BroApp extends StatefulWidget {
   final LiveKitService liveKitService;
   final StorageService storageService;
   final EgressService egressService;
+  final AssistantService assistantService;
+  final bool launchedFromAssist;
 
   const BroApp({
     super.key,
     required this.liveKitService,
     required this.storageService,
     required this.egressService,
+    required this.assistantService,
+    this.launchedFromAssist = false,
   });
 
   @override
@@ -142,6 +154,8 @@ class _BroAppState extends State<BroApp> {
       theme: buildAppTheme(),
       home: HomePage(
         egressService: widget.egressService,
+        assistantService: widget.assistantService,
+        launchedFromAssist: widget.launchedFromAssist,
       ),
     );
   }

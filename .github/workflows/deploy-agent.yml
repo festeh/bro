@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: /opt/bro
+  DEPLOY_PATH: /root/bro
 
 jobs:
   deploy:
@@ -58,7 +58,7 @@ jobs:
           GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_AI_TOKEN=${{ secrets.GOOGLE_AI_TOKEN }}
           BASIDIAN_URL=${{ secrets.BASIDIAN_URL }}
-          PYTHONPATH=/opt/bro
+          PYTHONPATH=/root/bro
           ENVEOF
           scp .env root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/.env
           rm .env
@@ -74,10 +74,10 @@ jobs:
       - name: Install dependencies and restart services
         run: |
           ssh root@${{ secrets.HOST }} << 'EOF'
-          cd /opt/bro
+          cd /root/bro
           export PATH="/root/.local/bin:$PATH"
           uv sync --no-dev
-          PYTHONPATH=/opt/bro uv run python agent/main.py download-files
+          PYTHONPATH=/root/bro uv run python agent/main.py download-files
           systemctl restart bro-livekit
           systemctl restart bro-agent
           sleep 3

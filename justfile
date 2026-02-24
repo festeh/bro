@@ -77,7 +77,7 @@ app target='linux':
                 exit 1
             fi
             echo "Running on device: $device"
-            cd app && flutter run -d "$device"
+            cd app && flutter run --flavor phone -d "$device" $DEFS
             ;;
         *)
             echo "Unknown target: {{target}}. Use linux, android, wear, wear-device, or phone-device."
