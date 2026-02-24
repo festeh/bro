@@ -3,11 +3,6 @@ name: Deploy Voice Agent
 on:
   push:
     branches: [master]
-    paths:
-      - 'agent/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'livekit.yaml'
   workflow_dispatch:
 
 env:
