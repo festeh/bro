@@ -259,10 +259,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     final agentConnectedAsync = ref.watch(agentConnectedProvider);
     final recordingsAsync = ref.watch(recordingsProvider);
 
-    final connectionStatus = connectionAsync.valueOrNull ??
+    final connectionStatus = connectionAsync.value ??
         ConnectionStatus.disconnected;
-    final isAgentConnected = agentConnectedAsync.valueOrNull ?? false;
-    final recordings = recordingsAsync.valueOrNull ?? [];
+    final isAgentConnected = agentConnectedAsync.value ?? false;
+    final recordings = recordingsAsync.value ?? [];
 
     // Listen to transcription events for recording mode
     ref.listen(transcriptionProvider, (_, next) {

@@ -85,14 +85,12 @@ class SessionNotificationEvent {
 
 class LiveKitService {
   static const String _defaultIdentity = 'desktop-user';
-  static const Duration _agentTimeout = Duration(seconds: 3);
-  static const int _maxAgentRetries = 5;
+  static const Duration _agentTimeout = Duration(seconds: 15);
 
   final String _wsUrl;
   final String _identity;
   final String _roomName;
   Timer? _agentWatchdog;
-  int _agentRetryCount = 0;
 
   final TokenService _tokenService;
   TokenService get tokenService => _tokenService;
@@ -172,7 +170,7 @@ class LiveKitService {
           adaptiveStream: true,
           dynacast: true,
           defaultAudioPublishOptions: AudioPublishOptions(
-            audioBitrate: 24000, // Speech quality
+            encoding: AudioEncoding(maxBitrate: 24000), // Speech quality
           ),
         ),
       );
@@ -186,7 +184,6 @@ class LiveKitService {
           _isAgentConnected = true;
           _agentConnectedController.add(true);
           _agentWatchdog?.cancel();
-          _agentRetryCount = 0;
         }
       });
       _room!.events.on<ParticipantDisconnectedEvent>((event) {
@@ -209,7 +206,7 @@ class LiveKitService {
         }
       }
 
-      // Start watchdog: if no agent after timeout, reconnect to trigger fresh dispatch
+      // Warn if agent doesn't show up within timeout
       if (!_isAgentConnected) {
         _startAgentWatchdog();
       }
@@ -240,33 +237,11 @@ class LiveKitService {
 
   void _startAgentWatchdog() {
     _agentWatchdog?.cancel();
-    _agentWatchdog = Timer(_agentTimeout, () async {
+    _agentWatchdog = Timer(_agentTimeout, () {
       if (_isAgentConnected) return;
-      _agentRetryCount++;
-      if (_agentRetryCount > _maxAgentRetries) {
-        _log.warning('Agent not found after $_maxAgentRetries retries, giving up');
-        return;
-      }
-      _log.info('Agent not found after $_agentTimeout, reconnecting (attempt $_agentRetryCount/$_maxAgentRetries)...');
-      await _reconnect();
+      _log.warning('Agent not found after $_agentTimeout');
+      _agentConnectedController.add(false);
     });
-  }
-
-  Future<void> _reconnect() async {
-    // Full teardown (same as disconnect but without status emissions)
-    _room?.unregisterTextStreamHandler(LiveKitTopics.transcription);
-    _room?.unregisterTextStreamHandler(LiveKitTopics.llmStream);
-    _room?.unregisterTextStreamHandler(LiveKitTopics.vadStatus);
-    try {
-      await _room?.disconnect();
-    } on PlatformException {
-      // flutter_webrtc throws "No active stream to cancel" when cleaning up
-      // peer connections that were short-lived or had no tracks — harmless.
-    }
-    _room?.removeListener(_onRoomEvent);
-    _room = null;
-    // Reconnect triggers a new room creation on the server → fresh agent dispatch
-    await connect();
   }
 
   Future<void> disconnect() async {
