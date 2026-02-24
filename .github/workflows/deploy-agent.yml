@@ -53,6 +53,8 @@ jobs:
           GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_AI_TOKEN=${{ secrets.GOOGLE_AI_TOKEN }}
           BASIDIAN_URL=${{ secrets.BASIDIAN_URL }}
+          AI_BASE_URL=${{ secrets.AI_BASE_URL }}
+          AI_API_KEY=${{ secrets.AI_API_KEY }}
           PYTHONPATH=/root/bro
           ENVEOF
           scp .env root@${{ secrets.HOST }}:${{ env.DEPLOY_PATH }}/.env
