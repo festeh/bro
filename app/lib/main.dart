@@ -74,6 +74,15 @@ void main() async {
     wsUrl: _livekitUrl,
     deviceId: settingsService.deviceId,
   );
+
+  // Sync persisted settings into LiveKitService before connect() sends metadata.
+  // Without this, mobile clients send default values because SettingsNotifier
+  // is only initialized lazily when the settings UI is opened.
+  liveKitService.setSttProvider(settingsService.sttProvider);
+  liveKitService.setLlmModel(settingsService.llmModel);
+  liveKitService.setTtsEnabled(settingsService.ttsEnabled);
+  liveKitService.setExcludedAgents(settingsService.excludedAgents);
+
   final egressService = EgressService(tokenService: tokenService);
   final storageService = StorageService(recordingsDir: recordingsDir);
 
