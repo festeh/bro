@@ -3,23 +3,61 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/settings_provider.dart';
 import 'app_sidebar.dart' show showLlmModelPicker;
+import 'connection_indicator.dart' show connectionInfoSection;
 import '../services/livekit_service.dart';
 import '../theme/tokens.dart';
 
 /// Shows the settings bottom sheet.
-void showSettingsSheet(BuildContext context) {
+///
+/// When connection info parameters are provided, a debug section is shown
+/// at the bottom of the sheet.
+void showSettingsSheet(
+  BuildContext context, {
+  ConnectionStatus? connectionStatus,
+  bool? isAgentConnected,
+  String? wsUrl,
+  String? roomName,
+  String? apiKey,
+}) {
   showModalBottomSheet(
     context: context,
+    isScrollControlled: true,
     backgroundColor: AppTokens.backgroundSecondary,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (context) => const SettingsSheet(),
+    builder: (context) => SettingsSheet(
+      connectionStatus: connectionStatus,
+      isAgentConnected: isAgentConnected,
+      wsUrl: wsUrl,
+      roomName: roomName,
+      apiKey: apiKey,
+    ),
   );
 }
 
 class SettingsSheet extends ConsumerWidget {
-  const SettingsSheet({super.key});
+  final ConnectionStatus? connectionStatus;
+  final bool? isAgentConnected;
+  final String? wsUrl;
+  final String? roomName;
+  final String? apiKey;
+
+  const SettingsSheet({
+    super.key,
+    this.connectionStatus,
+    this.isAgentConnected,
+    this.wsUrl,
+    this.roomName,
+    this.apiKey,
+  });
+
+  bool get _hasConnectionInfo =>
+      connectionStatus != null &&
+      isAgentConnected != null &&
+      wsUrl != null &&
+      roomName != null &&
+      apiKey != null;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,7 +66,7 @@ class SettingsSheet extends ConsumerWidget {
 
     return SafeArea(
       top: false,
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTokens.spacingLg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -135,6 +173,16 @@ class SettingsSheet extends ConsumerWidget {
                 },
               );
             }),
+            if (_hasConnectionInfo) ...[
+              const SizedBox(height: AppTokens.spacingLg),
+              connectionInfoSection(
+                status: connectionStatus!,
+                isAgentConnected: isAgentConnected!,
+                wsUrl: wsUrl!,
+                roomName: roomName!,
+                apiKey: apiKey!,
+              ),
+            ],
             const SizedBox(height: AppTokens.spacingMd),
           ],
         ),

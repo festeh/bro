@@ -16,4 +16,8 @@ pm2 logs agent --lines 100
 tail -f /tmp/bro-logs/agent.log
 ```
 
+## Installing on Android
+
+Always use `just install` to build and install the APK on a connected phone. Never use `adb install` or `flutter build` directly.
+
 <!-- MANUAL ADDITIONS END -->

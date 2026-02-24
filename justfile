@@ -113,6 +113,10 @@ build target:
             ;;
     esac
 
+# Build and install phone APK on connected device
+install: (build "android-prod")
+    adb install -r app/build/app/outputs/flutter-apk/app-phone-release.apk
+
 # Build and deploy phone APK to pCloud
 deploy: (build "android-prod")
     cp app/build/app/outputs/flutter-apk/app-phone-release.apk ~/pCloudDrive/android-apps/bro/

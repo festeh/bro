@@ -419,7 +419,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ],
         ),
-        title: Text(_currentMode == AppMode.chat ? 'Chat' : 'Recordings'),
+        centerTitle: true,
+        title: ConnectionStatusLabel(
+          status: connectionStatus,
+          isAgentConnected: isAgentConnected,
+          onReconnect: () => _connectToLiveKit(),
+        ),
         actions: [
           if (_currentMode == AppMode.chat)
             IconButton(
@@ -431,17 +436,17 @@ class _HomePageState extends ConsumerState<HomePage> {
           IconButton(
             icon: const Icon(Icons.settings, size: 20),
             color: AppTokens.textSecondary,
-            onPressed: () => showSettingsSheet(context),
+            onPressed: () => showSettingsSheet(
+              context,
+              connectionStatus: connectionStatus,
+              isAgentConnected: isAgentConnected,
+              wsUrl: liveKit.wsUrl,
+              roomName: liveKit.roomName,
+              apiKey: liveKit.tokenService.apiKey,
+            ),
             tooltip: 'Settings',
           ),
-          ConnectionIndicator(
-            status: connectionStatus,
-            isAgentConnected: isAgentConnected,
-            wsUrl: liveKit.wsUrl,
-            roomName: liveKit.roomName,
-            apiKey: liveKit.tokenService.apiKey,
-          ),
-          const SizedBox(width: AppTokens.spacingMd),
+          const SizedBox(width: AppTokens.spacingSm),
         ],
       ),
       body: _buildMainContent(connectionStatus, recordings),
