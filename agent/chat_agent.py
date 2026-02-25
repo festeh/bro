@@ -12,6 +12,9 @@ from livekit.plugins import elevenlabs
 from my_agents.graph import classify_intent
 from my_agents.models import Intent
 from my_agents.models_config import create_chat_llm
+from my_agents.notes.basidian_agent import BasidianAgent
+from my_agents.result import Err, Ok, Result
+from my_agents.task.task_agent import TaskAgent
 
 from agent.constants import (
     ATTR_INTENT,
@@ -22,8 +25,6 @@ from agent.constants import (
     TOPIC_LLM_STREAM,
     TOPIC_VAD_STATUS,
 )
-from agent.notes.basidian_agent import BasidianAgent
-from agent.result import Err, Ok, Result
 from agent.settings import (
     SESSION_TIMEOUT,
     SESSION_WARNING_THRESHOLD,
@@ -32,7 +33,6 @@ from agent.settings import (
     create_llm,
     create_stt,
 )
-from agent.task.task_agent import TaskAgent
 
 logger = logging.getLogger("voice-agent")
 
